@@ -1,0 +1,24 @@
+cmake_minimum_required(VERSION 3.28...3.30)
+
+find_package(Qt6 REQUIRED Widgets)
+
+add_library(bread-desk MODULE)
+add_library(OBS::bread-desk ALIAS bread-desk)
+
+target_sources(bread-desk PRIVATE Desk.hpp desk.cpp)
+
+target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs Qt::Widgets)
+
+if(OS_WINDOWS)
+  configure_file(cmake/windows/obs-module.rc.in bread-desk.rc)
+  target_sources(bread-desk PRIVATE bread-desk.rc)
+endif()
+
+set_target_properties_obs(
+  bread-desk
+  PROPERTIES FOLDER plugins/bread-desk
+             PREFIX ""
+             AUTOMOC ON
+             AUTOUIC ON
+             AUTORCC ON
+)

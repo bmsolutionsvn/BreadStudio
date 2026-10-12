@@ -104,3 +104,5 @@ add_obs_plugin(vlc-video WITH_MESSAGE)
 add_obs_plugin(win-capture PLATFORMS WINDOWS)
 add_obs_plugin(win-dshow PLATFORMS WINDOWS)
 add_obs_plugin(win-wasapi PLATFORMS WINDOWS)
+
+add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/desk" "${CMAKE_BINARY_DIR}/breadstudio/desk")

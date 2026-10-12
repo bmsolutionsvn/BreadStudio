@@ -10,6 +10,7 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 ## Edited
 
 - `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
+- `plugins/CMakeLists.txt` - one line that adds breadstudio/desk to the build
 
 ## Replaced
 
