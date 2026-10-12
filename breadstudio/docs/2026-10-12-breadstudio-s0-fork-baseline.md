@@ -16,7 +16,8 @@
 - Repo: `bmsolutionsvn/BreadStudio`, a public fork of `obsproject/obs-studio`. Local path `F:\Coding\BreadMedia\BreadStudio`. Branch `main`. Remote `upstream` = `https://github.com/obsproject/obs-studio.git`.
 - **Never rebase or force-push `main`.** Upstream releases are merged.
 - **Anything that publishes is an owner gate:** creating the GitHub repo, every `git push`, changing repo settings. A worker stops at a step marked **OWNER GATE** and waits.
-- Every OBS file that is edited, added outside `breadstudio/`, or replaced is listed in `breadstudio/UPSTREAM-EDITS.md` in the same commit. `breadstudio/check-edits.ps1` must pass before every commit from Task 2 on.
+- Every OBS file that is edited, added outside `breadstudio/`, or replaced is listed in `breadstudio/UPSTREAM-EDITS.md` in the same commit. `breadstudio/check-edits.ps1` must pass before every commit from Task 2 on. The order is always: `git add -A`, run the check, commit. The check reads the working tree, and a new file that is not staged is invisible to it.
+- OBS's `.gitignore` ignores every top-level folder it does not name. `!/breadstudio` was added in Task 2; any other new top-level path needs the same.
 - Do not rename `obs.dll`, `obs-frontend-api.dll`, any plugin, or change `LIBOBS_API_VER`.
 - Do not edit any file under `frontend/data/locale/` or `plugins/*/data/locale/`.
 - Do not delete or edit files under `.github/` that OBS owns. Only add `breadstudio-windows.yaml`.
@@ -34,6 +35,42 @@
 3. **A translation key that contains "OBS"** (for example `Remux.OBSRecording`) must not be renamed, or OBS can no longer find the string. Pinned by Task 7 Step 1.
 4. **The edits list goes stale in either direction:** an OBS file edited but not listed, or listed but no longer edited (after a merge makes an edit unnecessary), or an OBS file deleted. Pinned by Task 2 Step 1.
 5. **A BreadStudio release tag changes what `git describe` returns**, which OBS's build uses for the library version that plugins check. The build must always pass the pinned OBS version explicitly. Pinned by the version assertion in Task 7 Step 5.
+
+---
+
+## Status (2026-10-12): where to resume
+
+Execution was started and then paused at the owner's request. This is the state of the machine; the task text below already includes everything learned so far.
+
+**Done**
+
+- Inno Setup 6.7.3 is installed. winget put it in `%LOCALAPPDATA%\Programs\Inno Setup 6`, not in `Program Files (x86)`.
+- The local repo exists at `F:\Coding\BreadMedia\BreadStudio`, cloned from OBS (remote `upstream`), branch `main` at tag `32.2.2`, submodules fetched. There is no `origin` remote yet.
+- Unmodified OBS 32.2.2 configured and built here with Visual Studio 2026 (both exit 0), and ran in portable mode with the title `OBS 32.2.2 - Portable Mode - Profile: Untitled - Scenes: Untitled`. `build_x64\` holds that build.
+- Task 2 is committed (`b23f0fd2e`): the edits list, `check-edits.ps1` with 9 passing tests, `build.ps1`, `VERSION`, `UPSTREAM-TAG`, the `.gitignore` line, and copies of the spec and plan.
+- Task 7 Steps 1–4 are committed (`d06c171e9`): `Rename-Product.ps1` with 20 passing tests. A trial on a copy of OBS's 77 real translation files renamed 75 of them and left no bare "OBS" in any value.
+
+**Not done**
+
+- **Nothing is published.** No GitHub repo exists and nothing has been pushed.
+- **Task 3 was started and not finished.** Its four new files were written and four OBS files were edited, but nothing was built or checked, and one of the edits (the About text) may not have applied. That work is parked in `git stash`. Drop it and do Task 3 from Step 1:
+
+  ```powershell
+  cd F:\Coding\BreadMedia\BreadStudio
+  git stash list
+  git stash drop
+  ```
+
+- Tasks 4, 5, 6, the rest of 7, and 8, 9, 10 have not been started.
+
+**Resume order**
+
+1. Task 1 Step 3 (create the fork), Step 4 (add `origin`) and Step 7 (push). These are owner gates and can also wait until Task 8, which is the first task that needs GitHub.
+2. Task 3, then 4, 5, 6.
+3. Task 7 from Step 5.
+4. Tasks 8, 9, 10.
+
+Steps already done are ticked (`- [x]`) below.
 
 ---
 
@@ -67,6 +104,7 @@ OBS files edited (each is listed in `UPSTREAM-EDITS.md` when edited):
 
 | Path | Edit |
 |---|---|
+| `.gitignore` | Un-ignores `breadstudio/` (done in Task 2). |
 | `frontend/CMakeLists.txt` | Program file name; one `include()` line. |
 | `frontend/OBSApp.cpp` | Settings folder prefix; crash-log upload off. |
 | `frontend/widgets/OBSBasic.cpp` | Menu branding call; window title; plugin folder. |
@@ -86,7 +124,7 @@ OBS files edited (each is listed in `UPSTREAM-EDITS.md` when edited):
 **Interfaces:**
 - Produces: a local clone on branch `main` at tag `32.2.2`, remote `upstream`, and a working `build_x64/` from an unmodified build.
 
-- [ ] **Step 1: Check prerequisites**
+- [x] **Step 1: Check prerequisites** (done 2026-10-12: org visible, Visual Studio 2026 and SDK present, 527 GB free)
 
 Run in PowerShell:
 
@@ -99,14 +137,14 @@ Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0"
 
 Expected: `bmsolutionsvn`, `True`, `True`, and at least 40 (GB free). If the first command fails, stop: the GitHub account cannot see the organisation.
 
-- [ ] **Step 2: Install Inno Setup**
+- [x] **Step 2: Install Inno Setup** (done 2026-10-12: version 6.7.3)
 
 ```powershell
-winget install -e --id JRSoftware.InnoSetup --accept-source-agreements --accept-package-agreements
-Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+winget install -e --id JRSoftware.InnoSetup --silent --accept-source-agreements --accept-package-agreements
+Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 ```
 
-Expected: `True`.
+Expected: `True`. winget installs it for the current user, so it is not in `Program Files (x86)`. `package.ps1` (Task 7) looks in both places.
 
 - [ ] **Step 3: OWNER GATE — create the public fork**
 
@@ -119,22 +157,33 @@ gh repo view bmsolutionsvn/BreadStudio --json isFork,visibility,parent --jq '"\(
 
 Expected: `true PUBLIC obsproject/obs-studio`.
 
-- [ ] **Step 4: Clone and set up the branch**
+- [x] **Step 4a: Clone and set up the branch** (done 2026-10-12)
+
+The clone was made from OBS directly, with the remote named `upstream`, so that the build and Task 2 did not have to wait for the fork:
 
 ```powershell
-git clone https://github.com/bmsolutionsvn/BreadStudio.git F:\Coding\BreadMedia\BreadStudio
+git clone --origin upstream --branch 32.2.2 https://github.com/obsproject/obs-studio.git F:\Coding\BreadMedia\BreadStudio
 cd F:\Coding\BreadMedia\BreadStudio
 git config core.longpaths true
-git remote add upstream https://github.com/obsproject/obs-studio.git
-git fetch upstream --tags
-git checkout -b main 32.2.2
+git checkout -b main
 git submodule update --init --recursive
 git log -1 --format=%H
 ```
 
-Expected last line: `ba2f32bdf791005443988a4955e963663e16b1ed`.
+Result: `ba2f32bdf791005443988a4955e963663e16b1ed`.
 
-- [ ] **Step 5: Build OBS unmodified**
+- [ ] **Step 4b: Add the fork as `origin`** (after Step 3)
+
+```powershell
+cd F:\Coding\BreadMedia\BreadStudio
+git remote add origin https://github.com/bmsolutionsvn/BreadStudio.git
+git fetch origin
+git remote -v
+```
+
+Expected: `origin` points at `bmsolutionsvn/BreadStudio` and `upstream` at `obsproject/obs-studio`.
+
+- [x] **Step 5: Build OBS unmodified** (done 2026-10-12: configure and build both exit 0)
 
 In a Visual Studio 2026 developer shell (see Global Constraints), from the repo root:
 
@@ -147,13 +196,13 @@ The first configure downloads OBS's prebuilt dependencies (several GB). Expected
 
 If configure fails on the generator or SDK version, stop and report the error text. Do not change the preset.
 
-- [ ] **Step 6: Run it once**
+- [x] **Step 6: Run it once** (done 2026-10-12: title `OBS 32.2.2 - Portable Mode - Profile: Untitled - Scenes: Untitled`)
 
 ```powershell
-Start-Process -WorkingDirectory build_x64\rundir\RelWithDebInfo\bin\64bit build_x64\rundir\RelWithDebInfo\bin\64bit\obs64.exe
+Start-Process -WorkingDirectory build_x64\rundir\RelWithDebInfo\bin\64bit build_x64\rundir\RelWithDebInfo\bin\64bit\obs64.exe -ArgumentList '--portable'
 ```
 
-Expected: OBS Studio 32.2.2 opens. Close it. This is the baseline every later task is compared against.
+`--portable` keeps this unmodified build's settings inside the build folder. Without it, it would write into your own `%APPDATA%\obs-studio`. Expected: OBS Studio 32.2.2 opens. Close it. This is the baseline every later task is compared against.
 
 - [ ] **Step 7: OWNER GATE — publish the branch and make it the default**
 
@@ -162,20 +211,23 @@ git push -u origin main
 gh repo edit bmsolutionsvn/BreadStudio --default-branch main --description "BreadStudio: a live production switcher, based on OBS Studio. Not affiliated with the OBS Project."
 ```
 
-Nothing is committed in this task; `main` equals the `32.2.2` tag.
+This pushes whatever `main` holds at the time: the `32.2.2` tag plus every BreadStudio commit made so far. If Task 8's workflow file is already committed, do Task 8 Step 3 (switching OBS's workflows off) before this push.
 
 ---
 
 ### Task 2: The edits list and its check
 
+**Done 2026-10-12, commit `b23f0fd2e`.** The code below matches what was committed. Nothing in this task needs to be run again.
+
 **Files:**
+- Modify: `.gitignore` (one line)
 - Create: `breadstudio/VERSION`, `breadstudio/UPSTREAM-TAG`, `breadstudio/UPSTREAM-EDITS.md`, `breadstudio/check-edits.ps1`, `breadstudio/check-edits.test.ps1`, `breadstudio/build.ps1`
 - Create: `breadstudio/docs/2026-10-12-breadstudio-s0-fork-baseline-design.md`, `breadstudio/docs/2026-10-12-breadstudio-s0-fork-baseline.md` (copies)
 
 **Interfaces:**
 - Produces: `breadstudio/check-edits.ps1 [-RepoRoot <path>]`, exit 0 when the list matches, exit 1 otherwise. List line format: a line starting with ``- `path/from/repo/root` `` followed by the reason. `breadstudio/build.ps1 [-Configuration RelWithDebInfo]`. `breadstudio/VERSION` holds `0.1.0`; `breadstudio/UPSTREAM-TAG` holds `32.2.2`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `breadstudio/check-edits.test.ps1`:
 
@@ -241,6 +293,12 @@ try {
     G commit -qam list-add
     Expect 0 'added file is listed'
 
+    # The check runs before a commit, so staged work must count.
+    Set-Content (Join-Path $repo 'd.c') 'd'
+    G add -A
+    Expect 1 'staged, uncommitted file is not listed'
+    G reset -q --hard
+
     Set-Content (Join-Path $repo 'breadstudio/UPSTREAM-TAG') '9.9.9'
     G commit -qam badtag
     Expect 1 'pinned tag does not exist'
@@ -251,12 +309,12 @@ try {
 Write-Host 'check-edits: all tests passed'
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.test.ps1`
 Expected: FAIL. PowerShell reports that `check-edits.ps1` does not exist, and the first `Expect` throws.
 
-- [ ] **Step 3: Write the script**
+- [x] **Step 3: Write the script**
 
 Create `breadstudio/check-edits.ps1`:
 
@@ -272,8 +330,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# Compared with the working tree, not HEAD, so staged work counts and the check can run before a commit.
+# Run `git add -A` first: a new file that is not staged is invisible to git diff.
 # --no-renames: a moved OBS file must show up as one deletion and one addition.
-$changed = @(git -C $RepoRoot diff --name-only --no-renames $tag HEAD -- . ':(exclude)breadstudio')
+$changed = @(git -C $RepoRoot diff --name-only --no-renames $tag -- . ':(exclude)breadstudio')
 if ($LASTEXITCODE -ne 0) {
     Write-Host 'git diff failed'
     exit 1
@@ -299,12 +359,12 @@ Write-Host "UPSTREAM-EDITS.md matches the $($changed.Count) file(s) changed sinc
 exit 0
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.test.ps1`
-Expected: eight `ok - …` lines, then `check-edits: all tests passed`.
+Expected: nine `ok - …` lines, then `check-edits: all tests passed`.
 
-- [ ] **Step 5: Add the version files, the list, the build script and the docs**
+- [x] **Step 5: Add the version files, the list, the build script and the docs**
 
 `breadstudio/VERSION` (one line, no trailing text):
 
@@ -332,10 +392,14 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 
 ## Edited
 
+- `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
+
 ## Replaced
 
 ## Added outside breadstudio/
 ```
+
+In `.gitignore`, add `!/breadstudio` on a new line directly below `!/.github`. Without it git ignores the whole `breadstudio/` folder, because OBS's `.gitignore` starts with `/*` and then names the folders it keeps.
 
 `breadstudio/build.ps1`:
 
@@ -369,15 +433,15 @@ Copy-Item F:\Coding\BreadMedia\docs\superpowers\specs\2026-10-12-breadstudio-s0-
 Copy-Item F:\Coding\BreadMedia\docs\superpowers\plans\2026-10-12-breadstudio-s0-fork-baseline.md breadstudio\docs\
 ```
 
-- [ ] **Step 6: Run the real check and commit**
+- [x] **Step 6: Run the real check and commit**
 
 ```powershell
+git add -A
 powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
-git add breadstudio
 git commit -m "breadstudio: add the upstream edits list, its check and the build script"
 ```
 
-Expected from the check: `UPSTREAM-EDITS.md matches the 0 file(s) changed since 32.2.2.`
+Expected from the check: `UPSTREAM-EDITS.md matches the 1 file(s) changed since 32.2.2.` (the one file is `.gitignore`).
 
 ---
 
@@ -707,12 +771,12 @@ Start `BreadStudio.exe` from that folder and check, in order:
 - [ ] **Step 11: Commit**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: brand the program name, title, tray, About and Help menu"
 ```
 
-Expected from the check: `UPSTREAM-EDITS.md matches the 4 file(s) changed since 32.2.2.`
+Expected from the check: `UPSTREAM-EDITS.md matches the 5 file(s) changed since 32.2.2.`
 
 ---
 
@@ -856,12 +920,12 @@ and change the existing `frontend/widgets/OBSBasic.cpp` line to:
 ```
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: keep settings, plugins and the instance lock separate from OBS"
 ```
 
-Expected from the check: `UPSTREAM-EDITS.md matches the 6 file(s) changed since 32.2.2.`
+Expected from the check: `UPSTREAM-EDITS.md matches the 7 file(s) changed since 32.2.2.`
 
 ---
 
@@ -1019,12 +1083,12 @@ Start `BreadStudio.exe` and confirm: the "BM" mark is the window icon, the taskb
 - [ ] **Step 5: Commit**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: replace the OBS logo with a placeholder mark"
 ```
 
-Expected from the check: `… matches the 9 file(s) changed since 32.2.2.`
+Expected from the check: `… matches the 10 file(s) changed since 32.2.2.`
 
 ---
 
@@ -1122,12 +1186,12 @@ Check:
 - [ ] **Step 4: Commit**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: add the Bread theme and make it the default"
 ```
 
-Expected from the check: `… matches the 11 file(s) changed since 32.2.2.`
+Expected from the check: `… matches the 12 file(s) changed since 32.2.2.`
 
 ---
 
@@ -1142,7 +1206,7 @@ Expected from the check: `… matches the 11 file(s) changed since 32.2.2.`
 
 Why text is renamed here and not in the source: "OBS" appears in 77 translation files of the interface and in plugin translations. Editing them would conflict on every merge. The packaging step rewrites the installed copies instead, so a build run from `build_x64\rundir` still shows OBS's wording in some dialogs. Only an installed build is fully branded, and only an installed build is smoke-tested.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `breadstudio/packaging/Rename-Product.test.ps1`:
 
@@ -1166,6 +1230,16 @@ Assert-Equal 'A="uses obs-websocket"' (Rename-ProductInText 'A="uses obs-websock
 Assert-Equal 'no equals sign OBS' (Rename-ProductInText 'no equals sign OBS') 'a line without = is kept'
 Assert-Equal "A=`"BreadStudio`"`r`nB=`"x`"`r`n" (Rename-ProductInText "A=`"OBS`"`r`nB=`"x`"`r`n") 'CRLF line endings are kept'
 Assert-Equal "A=`"BreadStudio`"`nB=`"BreadStudio`"`n" (Rename-ProductInText "A=`"OBS Studio`"`nB=`"OBS`"`n") 'every line is handled'
+
+# The scene-collection importer lists the programs it can import from; that entry names the real OBS Studio.
+Assert-Equal 'OBSStudio="OBS Studio"' (Rename-ProductInText 'OBSStudio="OBS Studio"') 'the importer program name is kept'
+Assert-Equal "A=`"BreadStudio`"`nOBSStudio=`"OBS Studio`"`nB=`"BreadStudio`"" (Rename-ProductInText "A=`"OBS`"`nOBSStudio=`"OBS Studio`"`nB=`"OBS`"") 'lines around the importer name are still renamed'
+
+# Japanese, Chinese and Korean write the name with no space around it.
+$wo = [string][char]0x3092   # Japanese particle "wo"
+Assert-Equal "A=`"BreadStudio${wo}`"" (Rename-ProductInText "A=`"OBS${wo}`"") 'OBS directly before a CJK character'
+Assert-Equal "A=`"${wo}BreadStudio`"" (Rename-ProductInText "A=`"${wo}OBS Studio`"") 'OBS Studio directly after a CJK character'
+Assert-Equal 'A="OBSBasic and MyOBS"' (Rename-ProductInText 'A="OBSBasic and MyOBS"') 'OBS inside a Latin word is kept'
 
 # Files: a BOM, CRLF and Vietnamese text survive; an untouched file is not rewritten.
 $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -1194,26 +1268,31 @@ try {
 Write-Host 'Rename-Product: all tests passed'
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\packaging\Rename-Product.test.ps1`
 Expected: FAIL, because `Rename-Product.ps1` does not exist.
 
-- [ ] **Step 3: Write `breadstudio/packaging/Rename-Product.ps1`**
+- [x] **Step 3: Write `breadstudio/packaging/Rename-Product.ps1`**
 
 ```powershell
 # Replaces the OBS product name with BreadStudio in the values of installed translation (.ini) files.
-# Keys are never changed. "OBS Classic", "OBS Project" and "OBSProject" name other things and are kept.
+# Keys are never changed. "OBS Classic", "OBS Project", "OBSProject" and the importer's "OBS Studio"
+# entry name other things and are kept.
 # Dot-source the file to get the two functions; pass -Path to rewrite files.
 param([string[]] $Path)
 
-$script:ProductPattern = [regex]'\bOBS(?: Studio)?\b(?! (?:Classic|Project)\b)'
+# Boundaries are ASCII letters and digits only: \b would treat Japanese, Chinese and Korean
+# characters as part of the word and skip "OBS" written directly against them.
+$script:ProductPattern = [regex]'(?<![A-Za-z0-9_])OBS(?: Studio)?(?![A-Za-z0-9_])(?! (?:Classic|Project)(?![A-Za-z0-9_]))'
 $script:ValuePattern = [regex]'(?m)^([^=\r\n]*=)([^\r\n]*)'
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
 function Rename-ProductInText([string] $Text) {
     return $script:ValuePattern.Replace($Text, [System.Text.RegularExpressions.MatchEvaluator] {
             param($match)
+            # The scene-collection importer's entry for the real OBS Studio keeps its name.
+            if ($match.Groups[1].Value -ceq 'OBSStudio=') { return $match.Value }
             $match.Groups[1].Value + $script:ProductPattern.Replace($match.Groups[2].Value, 'BreadStudio')
         })
 }
@@ -1244,10 +1323,12 @@ if ($Path) {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\packaging\Rename-Product.test.ps1`
-Expected: fifteen `ok - …` lines, then `Rename-Product: all tests passed`.
+Expected: twenty `ok - …` lines, then `Rename-Product: all tests passed`.
+
+Steps 1 to 4 were done on 2026-10-12 and committed as `d06c171e9`. Start this task at Step 5.
 
 - [ ] **Step 5: Write `breadstudio/packaging/package.ps1`**
 
@@ -1285,16 +1366,22 @@ $locales = @(Get-ChildItem (Join-Path $stage 'data') -Recurse -Filter '*.ini' |
 if ($locales.Count -eq 0) { throw 'No translation files found in the staged tree' }
 & (Join-Path $PSScriptRoot 'Rename-Product.ps1') -Path $locales
 
+# Same pattern as Rename-Product.ps1, and the same exception for the importer's entry.
 $english = Join-Path $stage 'data/obs-studio/locale/en-US.ini'
-$left = @(Select-String -Path $english -CaseSensitive -Pattern '=.*\bOBS(?: Studio)?\b(?! (?:Classic|Project)\b)')
+$left = @(Select-String -Path $english -CaseSensitive -Pattern '=.*(?<![A-Za-z0-9_])OBS(?: Studio)?(?![A-Za-z0-9_])(?! (?:Classic|Project)(?![A-Za-z0-9_]))' |
+        Where-Object { $_.Line -notmatch '^OBSStudio=' })
 if ($left.Count -gt 0) { throw "The OBS name is still in en-US.ini:`n$($left -join "`n")" }
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $redist = & $vswhere -latest -products * -find 'VC\Redist\MSVC\**\vc_redist.x64.exe' | Select-Object -Last 1
 if (-not $redist) { throw 'vc_redist.x64.exe not found in the Visual Studio install' }
 
-$iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-if (-not (Test-Path $iscc)) { throw "Inno Setup not found at $iscc" }
+# winget installs Inno Setup per user; its own installer and the CI image put it in Program Files (x86).
+$iscc = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) not found. Install it: winget install -e --id JRSoftware.InnoSetup' }
 
 & $iscc "/DAppVersion=$version" "/DStageDir=$stage" "/DRedist=$redist" "/DOutputDir=$build" (Join-Path $PSScriptRoot 'installer.iss')
 if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }
@@ -1378,8 +1465,8 @@ Start BreadStudio from the Start menu and, with the interface in English, open F
 - [ ] **Step 9: Commit**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: add the packaging script, product rename and installer"
 ```
 
@@ -1453,8 +1540,8 @@ In `breadstudio/UPSTREAM-EDITS.md`, under `## Added outside breadstudio/`, add:
 ```
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: add the Windows CI workflow"
 ```
 
@@ -1622,8 +1709,8 @@ Run everything from a Visual Studio 2026 developer shell at the repo root.
 - [ ] **Step 3: Commit the documents**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: add the smoke checklist and the merge routine"
 ```
 
@@ -1686,8 +1773,8 @@ Add a row to the table in `MERGING.md`: today's date, `32.2.2`, the new tag, the
 - [ ] **Step 6: OWNER GATE — merge, tag, push**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git add -A
+powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 git commit -m "breadstudio: merge OBS NEW and record the drill"
 git checkout main
 git merge --no-ff merge-NEW
