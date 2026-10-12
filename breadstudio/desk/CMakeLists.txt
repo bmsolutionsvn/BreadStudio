@@ -22,3 +22,13 @@ set_target_properties_obs(
              AUTOUIC ON
              AUTORCC ON
 )
+
+target_sources(bread-desk PRIVATE LayerGraph.cpp LayerGraph.hpp)
+
+# The one automated test: no OBS, no Qt.
+add_executable(bread-desk-test test/LayerGraphTest.cpp LayerGraph.cpp)
+target_include_directories(bread-desk-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+  bread-desk-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
