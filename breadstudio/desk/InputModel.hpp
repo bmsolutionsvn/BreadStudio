@@ -4,6 +4,7 @@
 
 #include "LayerGraph.hpp"
 
+#include <string>
 #include <vector>
 
 namespace desk {
@@ -54,5 +55,22 @@ void deleteInput(obs_source_t *input);
  * canReorder is false when the widget is not found. */
 bool canReorder();
 bool moveInput(int from, int to);
+
+struct Layer {
+	int64_t id; /* the scene item's id */
+	std::string name;
+	bool visible;
+};
+
+/* every item above the base, top first */
+std::vector<Layer> layers(obs_source_t *input);
+
+/* puts `layerInput` on top of `host` at half size, centred. False when that would make
+ * an input contain itself; nothing is added then. */
+bool addLayer(obs_source_t *host, obs_source_t *layerInput);
+
+void removeLayer(obs_source_t *host, int64_t id);
+void moveLayer(obs_source_t *host, int64_t id, bool up); /* never below the base */
+void setLayerVisible(obs_source_t *host, int64_t id, bool visible);
 
 } // namespace desk

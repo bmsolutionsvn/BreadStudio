@@ -1,6 +1,7 @@
 #include "InputBar.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "InputSettings.hpp"
 #include "TileDisplay.hpp"
 
 #include <obs-frontend-api.h>
@@ -16,10 +17,15 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace desk {
 
 /* U+266A, the eighth note */
 static const char *AudioGlyph = "\xE2\x99\xAA";
+
+/* U+2699, the gear */
+static const char *GearGlyph = "\xE2\x9A\x99";
 
 /* runs on whichever thread changed the mute state */
 static void onMute(void *param, calldata_t *)
@@ -158,6 +164,11 @@ QWidget *InputBar::makeFooter(int index)
 		}
 	});
 	buttons->addWidget(audio);
+
+	auto *gear = new QToolButton(footer);
+	gear->setText(QString::fromUtf8(GearGlyph));
+	connect(gear, &QToolButton::clicked, this, [this, index] { openSettings(index); });
+	buttons->addWidget(gear);
 	buttons->addStretch(1);
 
 	if (hasAudio(base)) {
@@ -171,6 +182,15 @@ void InputBar::refresh()
 {
 	muteSignals.clear();
 	sources = inputs();
+
+	/* close the settings window of an input that no longer exists */
+	for (InputSettings *open : findChildren<InputSettings *>()) {
+		const bool alive = std::any_of(sources.begin(), sources.end(),
+					       [open](const OBSSource &input) { return input.Get() == open->input(); });
+		if (!alive) {
+			delete open;
+		}
+	}
 
 	while (QLayoutItem *item = footerRow->takeAt(0)) {
 		delete item->widget();
@@ -210,6 +230,7 @@ void InputBar::updateTally()
 
 void InputBar::clear()
 {
+	qDeleteAll(findChildren<InputSettings *>());
 	muteSignals.clear();
 	sources.clear();
 	while (QLayoutItem *item = footerRow->takeAt(0)) {
@@ -314,6 +335,24 @@ void InputBar::deleteDialog(obs_source_t *input)
 
 	/* OBS raises "scene list changed" when the scene goes, which refreshes the bar */
 	deleteInput(input);
+}
+
+void InputBar::openSettings(int index)
+{
+	if ((size_t)index >= sources.size()) {
+		return;
+	}
+	obs_source_t *input = sources[(size_t)index];
+
+	for (InputSettings *open : findChildren<InputSettings *>()) {
+		if (open->input() == input) {
+			open->raise();
+			open->activateWindow();
+			return;
+		}
+	}
+
+	(new InputSettings(input, this))->show();
 }
 
 } // namespace desk

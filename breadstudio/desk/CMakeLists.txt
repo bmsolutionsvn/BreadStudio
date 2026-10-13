@@ -34,6 +34,8 @@ target_sources(
     InputBar.hpp
     InputModel.cpp
     InputModel.hpp
+    InputSettings.cpp
+    InputSettings.hpp
     LayerGraph.cpp
     LayerGraph.hpp
     TileDisplay.cpp

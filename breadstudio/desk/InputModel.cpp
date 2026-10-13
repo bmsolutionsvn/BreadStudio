@@ -364,4 +364,82 @@ bool moveInput(int from, int to)
 	return true;
 }
 
+std::vector<Layer> layers(obs_source_t *input)
+{
+	std::vector<Layer> all;
+	obs_scene_enum_items(
+		obs_scene_from_source(input),
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			static_cast<std::vector<Layer> *>(param)->push_back(
+				{obs_sceneitem_get_id(item), obs_source_get_name(obs_sceneitem_get_source(item)),
+				 obs_sceneitem_visible(item)});
+			return true;
+		},
+		&all);
+
+	/* enumerated bottom first: drop the base, then put the top first */
+	if (!all.empty()) {
+		all.erase(all.begin());
+	}
+	std::reverse(all.begin(), all.end());
+	return all;
+}
+
+bool addLayer(obs_source_t *host, obs_source_t *layerInput)
+{
+	if (wouldLoop(graph(), uuidOf(host), uuidOf(layerInput))) {
+		return false;
+	}
+
+	obs_sceneitem_t *item = obs_scene_add(obs_scene_from_source(host), layerInput);
+
+	/* half size in the middle, so the base still shows and the layer is easy to grab */
+	obs_video_info ovi = {};
+	obs_get_video_info(&ovi);
+	struct vec2 scale;
+	vec2_set(&scale, 0.5f, 0.5f);
+	obs_sceneitem_set_scale(item, &scale);
+	struct vec2 pos;
+	vec2_set(&pos, (float)ovi.base_width / 4.0f, (float)ovi.base_height / 4.0f);
+	obs_sceneitem_set_pos(item, &pos);
+
+	return true;
+}
+
+static obs_sceneitem_t *findLayer(obs_source_t *host, int64_t id)
+{
+	return obs_scene_find_sceneitem_by_id(obs_scene_from_source(host), id);
+}
+
+void removeLayer(obs_source_t *host, int64_t id)
+{
+	if (obs_sceneitem_t *item = findLayer(host, id)) {
+		obs_sceneitem_remove(item);
+	}
+}
+
+void setLayerVisible(obs_source_t *host, int64_t id, bool visible)
+{
+	if (obs_sceneitem_t *item = findLayer(host, id)) {
+		obs_sceneitem_set_visible(item, visible);
+	}
+}
+
+void moveLayer(obs_source_t *host, int64_t id, bool up)
+{
+	const std::vector<Layer> all = layers(host); /* top first */
+	const auto it = std::find_if(all.begin(), all.end(), [id](const Layer &layer) { return layer.id == id; });
+	if (it == all.end()) {
+		return;
+	}
+	if (up && it == all.begin()) {
+		return;
+	}
+	if (!up && it + 1 == all.end()) {
+		return; /* the next one down is the base */
+	}
+
+	obs_sceneitem_set_order(findLayer(host, id), up ? OBS_ORDER_MOVE_UP : OBS_ORDER_MOVE_DOWN);
+}
+
 } // namespace desk
