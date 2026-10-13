@@ -21,4 +21,7 @@ inline QString text(const char *key)
 	return QString::fromUtf8(obs_module_text(key));
 }
 
+/* call after anything changes the set, order or names of inputs; defined in desk.cpp */
+void inputsChanged();
+
 } // namespace desk

@@ -30,10 +30,14 @@ target_sources(
     AudioBed.hpp
     BusMeters.cpp
     BusMeters.hpp
+    InputBar.cpp
+    InputBar.hpp
     InputModel.cpp
     InputModel.hpp
     LayerGraph.cpp
     LayerGraph.hpp
+    TileDisplay.cpp
+    TileDisplay.hpp
 )
 
 # The one automated test: no OBS, no Qt.

@@ -2,11 +2,14 @@
 #include <obs-frontend-api.h>
 #include <obs.hpp>
 
+#include <QApplication>
 #include <QTimer>
 
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
 #include "Desk.hpp"
+#include "InputBar.hpp"
+#include "InputModel.hpp"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("bread-desk", "en-US")
@@ -21,15 +24,38 @@ using namespace desk;
 /* true between a scene collection finishing loading and starting to unload */
 static bool loaded = false;
 
+static InputBar *bar = nullptr; /* owned by its dock */
+
+namespace desk {
+void inputsChanged()
+{
+	if (!loaded) {
+		return;
+	}
+	bed().sync();
+	bar->refresh();
+}
+} // namespace desk
+
+/* OBS raises no frontend event when a scene is renamed, so follow libobs's own signal.
+ * It can come from any thread. */
+static void onSourceRename(void *, calldata_t *)
+{
+	QMetaObject::invokeMethod(qApp, [] { inputsChanged(); }, Qt::QueuedConnection);
+}
+
 static void load()
 {
 	loaded = true;
 	bed().rebuild();
+	bar->refresh();
 }
 
 static void unload()
 {
 	loaded = false;
+	bar->clear();
+	clearModel();
 	bed().clear();
 }
 
@@ -47,10 +73,21 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_EXIT:
 		unload();
 		busMeters().stop();
+		signal_handler_disconnect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+		inputsChanged();
+		break;
+	case OBS_FRONTEND_EVENT_TRANSITION_STOPPED:
+		onTransitionStopped();
+		bar->updateTally();
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_CHANGED:
+	case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
 		if (loaded) {
-			bed().sync();
+			bar->updateTally();
 		}
 		break;
 	default:
@@ -94,6 +131,11 @@ static void probeLogPeaks(void *)
 bool obs_module_load(void)
 {
 	busMeters().start();
+
+	bar = new InputBar();
+	obs_frontend_add_dock_by_id(InputsDockId, obs_module_text("Inputs"), bar);
+	signal_handler_connect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
+
 	obs_frontend_add_event_callback(onEvent, nullptr);
 
 	obs_frontend_add_tools_menu_item("Desk probe: toggle AFV of the Preview input", probeToggleAfv, nullptr);
