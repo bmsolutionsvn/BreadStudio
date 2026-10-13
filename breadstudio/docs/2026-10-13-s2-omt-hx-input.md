@@ -4,20 +4,43 @@
 
 **Goal:** An OBS input source, `OMT-HX Source`, that plays any Open Media Transport source — a BreadCamera over plain OMT or OMT-HX, with audio and alpha — by driving the merged `omthx` library, and sends tally back to the sender from OBS's program and preview state.
 
-**Architecture:** A new OBS plugin `plugins/omt-hx` with one async source. It owns an `omthx::Receiver` and a worker thread that pulls video and audio and hands them to OBS with `obs_source_output_video`/`obs_source_output_audio`; OBS renders them. The plugin compiles omthx's source files (`src/pure.cpp`, `src/decoder.cpp`, `src/link.cpp`) directly against **OBS's own FFmpeg** (the `FFmpeg::` targets), so there is one FFmpeg in the process, not two; only the patched `libomt.dll`/`libvmx.dll` are added, next to `obs64.exe`. OBS's `activate`/`deactivate`/`show`/`hide` callbacks map to the tally the receiver sends back.
+**Architecture:** A new OBS plugin, `breadstudio/omt-hx`, with one async source. It owns an `omthx::Receiver` and a worker thread that pulls video and audio and hands them to OBS with `obs_source_output_video`/`obs_source_output_audio`; OBS renders them. The plugin compiles omthx's four source files (`src/pure.cpp`, `src/encoder.cpp`, `src/decoder.cpp`, `src/link.cpp`) directly against **OBS's own FFmpeg** (the `FFmpeg::` targets), so there is one FFmpeg in the process, not two; only the patched `libomt.dll`/`libvmx.dll` are added, next to `obs64.exe`. The tally sent back is worked out from what Program and Preview are drawing, ten times a second.
 
 **Tech Stack:** OBS Studio 32.2.2 fork (BreadStudio), C++20 for the plugin translation units (omthx uses `std::span`), OBS's FFmpeg, the `omthx` sources from the OMT-HX checkout, the patched `libomt`, CMake + Visual Studio 2026, Windows PowerShell 5.1 scripts. Windows x64 only.
 
 **Spec:** `docs/superpowers/specs/2026-10-12-broadcast-roadmap-design.md` (R12, S2), the omthx design `../OMT-HX/docs/superpowers/specs/2026-10-12-omt-hx-design.md`, and this repo's `breadstudio/UPSTREAM-EDITS.md` rules.
 
+## Status (2026-10-14): checked against the code, not started
+
+This plan was written before S1 (the desk) was built. On 2026-10-14 it was checked against the OMT-HX checkout (`fe6a3f8`), OBS 32.2.2's dependencies and the desk as built, and changed in five places. Nothing in it has been run inside OBS yet.
+
+| Checked | Result | Change to this plan |
+|---|---|---|
+| omthx's sources against OBS's FFmpeg (libavcodec 62, libavutil 60, libswscale 9; OMT-HX's own build uses 63 and 61) | `pure.cpp`, `decoder.cpp`, `link.cpp` and `encoder.cpp` compile clean as C++20 with OBS's flags (`/W3 /WX /permissive-`). A probe DLL that uses `Receiver`, `setTally` and `discover` links, and depends on `avcodec-62.dll`, `avutil-60.dll`, `swscale-9.dll` and `libomt.dll` only. | None. |
+| Linking without `encoder.cpp` | **Fails**: `link.cpp` holds the sender and the receiver in one file, and the sender needs `omthx::Encoder`. Unresolved even with `/OPT:REF`. | `encoder.cpp` is compiled too. It is never called. |
+| The `obs_source_info` initialisers in Tasks 2 and 5 | **Would not compile**: C++20 wants designated initialisers in the order the struct declares them, and `update` comes after `get_properties`. | The fields are in declaration order. |
+| Tally from `activate`/`show` (old Task 5) | **Wrong with the desk.** The input bar and the multiview keep every input "showing", so every camera would read Preview all the time. The audio bed keeps an input with AFV unlit "active", so that camera would read Program all the time. Measured on the desk on 2026-10-14: a source in the bed reports active with something else on Program. | Task 5 is rewritten: tally comes from what output channel 0 and the Preview scene draw. |
+| Where the desk plugin lives | S1 put its plugin in `breadstudio/desk`, added by one `add_subdirectory` line in `plugins/CMakeLists.txt`. | This plugin goes in `breadstudio/omt-hx` the same way, so no file is added outside `breadstudio/`. |
+| The desk's Add menu | It lists a type only when that type is registered, and has no entry for this one. | New Task 6 adds the entry. |
+| `omthx/omthx.h` | `Receiver`, `VideoFrame`, `AudioFrame`, `Tally`, `discover()` are as Tasks 2 to 5 use them. | None. |
+| A sender to test with | `OMT-HX/build/omthx-send.exe` exists; BreadCamera has its OMT output (`a784e46`). | None. |
+
+**To settle before Task 1**
+
+- **BreadStudio's build then needs the OMT-HX checkout.** Task 1's CMake stops the configure when `../OMT-HX` is missing or has no built libomt. That is right for a release, and it means S0 Task 8's CI workflow must fetch OMT-HX and run its `scripts/build-libomt.ps1` before it configures BreadStudio.
+- **The desk's input bar was reworked on 2026-10-14** (`f78a6d607`). Task 6 names the table behind the Add menu, not a line number; read the file as it is then.
+
+**The rest of S2 has no spec.** This plan is the OMT part only. Kinde sign-in, the BreadCall room and its return, and BreadStream Channels as an output wait for the S2 spec, whose first decisions the roadmap lists in §8: how a desktop app signs in with Kinde, how BreadCall admits BreadStudio to a room with the right to publish, and which WebRTC client library BreadStudio and BreadCamera share. The roadmap also holds that spec until BreadCall's guest slots are merged.
+
 ## Global Constraints
 
 - All BreadStudio S0 Global Constraints apply: base OBS tag `32.2.2`; our code is separate from OBS; every OBS file edited or added outside `breadstudio/` is listed in `breadstudio/UPSTREAM-EDITS.md` in the same commit; `breadstudio/check-edits.ps1` passes before every commit; commit messages `breadstudio: <what changed>`; PowerShell 5.1 scripts; build from a VS 2026 developer shell; never rebase or force-push `main`.
-- The plugin is a MODULE that OBS loads; it must build with the OBS tree and land in `obs-plugins/64bit`. `set_target_properties_obs` does the deployment and copies the plugin's `data/` — do not hand-roll deployment for the plugin DLL.
+- The plugin is a MODULE that OBS loads; it lives in `breadstudio/omt-hx`, is added to the OBS tree by one `add_subdirectory` line in `plugins/CMakeLists.txt` (as `breadstudio/desk` is), and must land in `obs-plugins/64bit`. `set_target_properties_obs` does the deployment and copies the plugin's `data/` — do not hand-roll deployment for the plugin DLL.
 - The plugin translation units that include `omthx/omthx.h` and the omthx sources are compiled as **C++20** (`std::span`). OBS's default is C++17; the plugin target sets `CXX_STANDARD 20`.
 - `omthx` is consumed as source files from a checkout at `../OMT-HX`, after that checkout's `scripts/build-libomt.ps1` has populated `third_party/libomt/`. Do not add_subdirectory the OMT-HX CMake project — it calls `find_package(FFMPEG)` (vcpkg), which would pull a second FFmpeg into OBS's process.
-- The plugin needs only the omthx **decoder** path: `pure.cpp`, `decoder.cpp`, `link.cpp`. Do not compile `encoder.cpp` (Studio never sends).
-- The plugin links OBS's FFmpeg through the `FFmpeg::avcodec`, `FFmpeg::avutil`, `FFmpeg::swscale` targets from OBS's own `cmake/finders/FindFFmpeg.cmake`. If those exact target names are absent in this tree, read that module and use the names it creates; do not add a second FFmpeg.
+- The plugin uses only the omthx **receiver**, but compiles all four sources: `pure.cpp`, `encoder.cpp`, `decoder.cpp`, `link.cpp`. `link.cpp` holds the sender beside the receiver, and without `encoder.cpp` it does not link (checked 2026-10-14). The encoder is never called: Studio never sends.
+- The plugin links OBS's FFmpeg through the `FFmpeg::avcodec`, `FFmpeg::avutil`, `FFmpeg::swscale` targets from OBS's own `cmake/finders/FindFFmpeg.cmake` (the names `plugins/obs-ffmpeg` uses). Do not add a second FFmpeg.
+- `obs_source_info` is filled with C++20 designated initialisers, which must be in the order `libobs/obs-source.h` declares the fields: `id`, `type`, `output_flags`, `get_name`, `create`, `destroy`, `get_defaults`, `get_properties`, `update`, `video_tick`, `icon_type`.
 - This PC has an AMD Radeon RX 6600 and no NVIDIA GPU; the sender side is BreadCamera. Studio only decodes, so the encoder question does not arise here.
 - OBS has no plugin unit-test harness. Verification for this plugin is **build + a scripted load check + a manual smoke in OBS**; each task says exactly what to run and see. This is the OBS norm, not a placeholder.
 
@@ -26,18 +49,19 @@
 1. **A source that is not running yet.** Selecting an address that never appears must leave OBS stable (no crash, no busy loop), and the source must recover when the sender appears. Owned by Task 2 and Task 3.
 2. **Alpha.** BreadCamera can send alpha (packed). The receiver returns premultiplied BGRA when the source has alpha; OBS treats a frame with `flags == 0` as premultiplied, so it passes through unchanged. Owned by Task 2, verified by eye in Task 6.
 3. **Audio and video stay together.** Both come from one OMT stream; timestamps are offset from one OBS base clock, not minted per call. Owned by Task 3.
-4. **Tally reaches BreadCamera.** A source dropped on program must make the sender's `tally().program` true; on preview, `tally().preview`. Owned by Task 5.
+4. **Tally reaches BreadCamera, and only when it is true.** A source on Program, alone or as a layer, must make the sender's `tally().program` true; on Preview, `tally().preview`. A source that is only a tile in the input bar, or only in the audio bed, must read neither. Owned by Task 5.
 5. **The plugin does not fight OBS's own FFmpeg.** Exactly one FFmpeg in the process; the plugin links `FFmpeg::` targets and adds no `av*.dll` of its own. Owned by Task 1.
 
 ## File Structure
 
 | Path | Responsibility |
 |---|---|
-| `plugins/omt-hx/CMakeLists.txt` | Build the plugin: omthx sources + OBS FFmpeg + libomt, C++20, deploy libomt/libvmx |
-| `plugins/omt-hx/omt-hx.cpp` | The `omt_hx_source`: callbacks, receiver thread, video/audio output, tally |
-| `plugins/omt-hx/data/locale/en-US.ini` | The source's UI name |
-| `plugins/CMakeLists.txt` | `add_obs_plugin(omt-hx PLATFORMS WINDOWS)` (OBS file — listed in UPSTREAM-EDITS) |
-| `breadstudio/UPSTREAM-EDITS.md` | Add the two OBS entries above |
+| `breadstudio/omt-hx/CMakeLists.txt` | Build the plugin: omthx sources + OBS FFmpeg + libomt, C++20, deploy libomt/libvmx |
+| `breadstudio/omt-hx/omt-hx.cpp` | The `omt_hx_source`: callbacks, receiver thread, video/audio output, tally |
+| `breadstudio/omt-hx/data/locale/en-US.ini` | The source's UI name |
+| `plugins/CMakeLists.txt` | One more `add_subdirectory` line, under the desk's (OBS file — already listed in UPSTREAM-EDITS) |
+| `breadstudio/UPSTREAM-EDITS.md` | The reason on the `plugins/CMakeLists.txt` line now names both plugins |
+| `breadstudio/desk/InputBar.cpp`, `breadstudio/desk/data/locale/en-US.ini` | The Add menu's entry for this source (Task 6) |
 | `breadstudio/docs/SMOKE.md` | Add the OMT-HX smoke steps |
 
 ---
@@ -45,11 +69,11 @@
 ### Task 1: The plugin builds and OBS lists the source
 
 **Files:**
-- Create: `plugins/omt-hx/CMakeLists.txt`, `plugins/omt-hx/omt-hx.cpp`, `plugins/omt-hx/data/locale/en-US.ini`
+- Create: `breadstudio/omt-hx/CMakeLists.txt`, `breadstudio/omt-hx/omt-hx.cpp`, `breadstudio/omt-hx/data/locale/en-US.ini`
 - Modify: `plugins/CMakeLists.txt` (OBS file), `breadstudio/UPSTREAM-EDITS.md`
 
 **Interfaces:**
-- Consumes: a built OMT-HX checkout at `../OMT-HX` (`third_party/libomt/libomt.lib`, `src/decoder.cpp`); OBS's `FFmpeg::` targets and `OBS::libobs`.
+- Consumes: a built OMT-HX checkout at `../OMT-HX` (`third_party/libomt/libomt.lib`, `src/decoder.cpp`); OBS's `FFmpeg::` targets, `OBS::libobs` and `OBS::frontend-api`.
 - Produces: the OBS source id `omt_hx_source`, named `OMT-HX Source`; a build that puts `omt-hx.dll` in `obs-plugins/64bit` and `libomt.dll`/`libvmx.dll` beside `obs64.exe`.
 
 - [ ] **Step 1: Prerequisite — build the patched libomt once**
@@ -62,7 +86,7 @@ Expected: `..\OMT-HX\third_party\libomt\libomt.lib` exists. If the OMT-HX checko
 
 - [ ] **Step 2: Write the plugin build file**
 
-Create `plugins/omt-hx/CMakeLists.txt`:
+Create `breadstudio/omt-hx/CMakeLists.txt`:
 ```cmake
 cmake_minimum_required(VERSION 3.28...3.30)
 
@@ -80,11 +104,13 @@ add_library(OBS::omt-hx ALIAS omt-hx)
 
 set_target_properties(omt-hx PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
+# All four: link.cpp holds the sender beside the receiver, and the sender needs the encoder.
 target_sources(
   omt-hx
   PRIVATE
     omt-hx.cpp
     "${OMTHX_ROOT}/src/pure.cpp"
+    "${OMTHX_ROOT}/src/encoder.cpp"
     "${OMTHX_ROOT}/src/decoder.cpp"
     "${OMTHX_ROOT}/src/link.cpp"
 )
@@ -95,7 +121,7 @@ target_link_libraries(
   omt-hx
   PRIVATE
     OBS::libobs
-    $<$<PLATFORM_ID:Windows>:OBS::w32-pthreads>
+    OBS::frontend-api
     FFmpeg::avcodec
     FFmpeg::avutil
     FFmpeg::swscale
@@ -115,12 +141,13 @@ add_custom_command(
   VERBATIM
 )
 
-set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins PREFIX "")
+set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
 ```
+`OBS::frontend-api` is for Task 5, which asks the frontend for the Preview scene.
 
 - [ ] **Step 3: Write the plugin source (registers the source, no media yet)**
 
-Create `plugins/omt-hx/omt-hx.cpp`:
+Create `breadstudio/omt-hx/omt-hx.cpp`:
 ```cpp
 // OMT-HX input source: plays an Open Media Transport source (plain OMT or OMT-HX) via omthx.
 #include <obs-module.h>
@@ -168,7 +195,7 @@ bool obs_module_load(void)
 ```
 Note the `struct omt_source` above is a placeholder shape; Task 2 replaces both callbacks with a real `omt_source`. This step's only job is a source that registers and shows a text field.
 
-Create `plugins/omt-hx/data/locale/en-US.ini`:
+Create `breadstudio/omt-hx/data/locale/en-US.ini`:
 ```ini
 OMTHXSource="OMT-HX Source"
 Source="Source (host and name)"
@@ -176,23 +203,19 @@ Source="Source (host and name)"
 
 - [ ] **Step 4: Register the plugin and the edits list**
 
-In `plugins/CMakeLists.txt`, insert (alphabetical position, between `obs-x264` and `oss-audio`):
+In `plugins/CMakeLists.txt`, under the line that adds `breadstudio/desk`, at the end of the file, add:
 ```cmake
-add_obs_plugin(omt-hx PLATFORMS WINDOWS)
+add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/omt-hx" "${CMAKE_BINARY_DIR}/breadstudio/omt-hx")
 ```
-In `breadstudio/UPSTREAM-EDITS.md`, under **Edited** add:
+In `breadstudio/UPSTREAM-EDITS.md`, under **Edited**, change the reason on the existing `plugins/CMakeLists.txt` line so it names both:
 ```
-- `plugins/CMakeLists.txt` - register the omt-hx plugin
+- `plugins/CMakeLists.txt` - two lines that add breadstudio/desk and breadstudio/omt-hx to the build
 ```
-and under **Added outside breadstudio/** add one line per file (the check matches exact paths, not a directory):
-```
-- `plugins/omt-hx/CMakeLists.txt` - the OMT-HX input plugin build file
-- `plugins/omt-hx/omt-hx.cpp` - the OMT-HX input source
-- `plugins/omt-hx/data/locale/en-US.ini` - the source's UI strings
-```
+Nothing goes under **Added outside breadstudio/**: the plugin's files are inside `breadstudio/`.
+
 Stage the files first (the check reads the staged tree), then run it:
 ```powershell
-git add plugins/CMakeLists.txt plugins/omt-hx breadstudio/UPSTREAM-EDITS.md
+git add plugins/CMakeLists.txt breadstudio/omt-hx breadstudio/UPSTREAM-EDITS.md
 powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 ```
 Expected: passes.
@@ -223,7 +246,7 @@ Run the built `obs64.exe` (portable). In the Sources panel click **+**; **OMT-HX
 - [ ] **Step 8: Commit**
 
 ```powershell
-git add plugins/CMakeLists.txt plugins/omt-hx breadstudio/UPSTREAM-EDITS.md
+git add plugins/CMakeLists.txt breadstudio/omt-hx breadstudio/UPSTREAM-EDITS.md
 git commit -m "breadstudio: add the omt-hx input plugin skeleton"
 ```
 
@@ -232,7 +255,7 @@ git commit -m "breadstudio: add the omt-hx input plugin skeleton"
 ### Task 2: The receiver thread outputs video
 
 **Files:**
-- Modify: `plugins/omt-hx/omt-hx.cpp`
+- Modify: `breadstudio/omt-hx/omt-hx.cpp`
 
 **Interfaces:**
 - Consumes: `omthx::Receiver`, `omthx::VideoFrame`.
@@ -240,7 +263,7 @@ git commit -m "breadstudio: add the omt-hx input plugin skeleton"
 
 - [ ] **Step 1: Write the receiver and the video path**
 
-Replace `plugins/omt-hx/omt-hx.cpp` with:
+Replace `breadstudio/omt-hx/omt-hx.cpp` with:
 ```cpp
 // OMT-HX input source: plays an Open Media Transport source (plain OMT or OMT-HX) via omthx.
 #include <obs-module.h>
@@ -266,7 +289,7 @@ struct omt_source {
 	std::thread worker;
 	std::atomic<bool> run{false};
 	uint64_t time_base = 0;      // OBS ns minus the first OMT timestamp times 100
-	std::mutex rxMutex;          // guards rx against the tally callbacks
+	std::mutex rxMutex;          // guards rx against the tally task, which runs on the UI thread
 	std::vector<uint8_t> scratch;  // premultiplied copy, when the source sends straight alpha
 };
 
@@ -376,9 +399,9 @@ static const struct obs_source_info omt_hx_source = {
         .get_name = omt_get_name,
         .create = omt_create,
         .destroy = omt_destroy,
-        .update = omt_update,
         .get_defaults = omt_defaults,
         .get_properties = omt_properties,
+        .update = omt_update,
         .icon_type = OBS_ICON_TYPE_CAMERA,
 };
 
@@ -401,7 +424,7 @@ Start a BreadCamera (or the OMT-HX `omthx-send.exe` for a quick test) with a kno
 - [ ] **Step 4: Commit**
 
 ```powershell
-git add plugins/omt-hx/omt-hx.cpp
+git add breadstudio/omt-hx/omt-hx.cpp
 git commit -m "breadstudio: omt-hx source shows the incoming picture"
 ```
 
@@ -410,7 +433,7 @@ git commit -m "breadstudio: omt-hx source shows the incoming picture"
 ### Task 3: Audio
 
 **Files:**
-- Modify: `plugins/omt-hx/omt-hx.cpp`
+- Modify: `breadstudio/omt-hx/omt-hx.cpp`
 
 **Interfaces:**
 - Consumes: `omthx::AudioFrame`.
@@ -444,7 +467,7 @@ Then in OBS, add the source against a BreadCamera sending audio. Expected: the O
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add plugins/omt-hx/omt-hx.cpp
+git add breadstudio/omt-hx/omt-hx.cpp
 git commit -m "breadstudio: omt-hx source carries audio"
 ```
 
@@ -453,7 +476,7 @@ git commit -m "breadstudio: omt-hx source carries audio"
 ### Task 4: A source picker built from discovery
 
 **Files:**
-- Modify: `plugins/omt-hx/omt-hx.cpp`
+- Modify: `breadstudio/omt-hx/omt-hx.cpp`
 
 **Interfaces:**
 - Consumes: `omthx::discover()`.
@@ -499,88 +522,182 @@ In OBS, open the source's Properties with a BreadCamera running. Expected: the l
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add plugins/omt-hx/omt-hx.cpp plugins/omt-hx/data/locale/en-US.ini
+git add breadstudio/omt-hx/omt-hx.cpp breadstudio/omt-hx/data/locale/en-US.ini
 git commit -m "breadstudio: pick an OMT source from discovery"
 ```
 
 ---
 
-### Task 5: Tally from program and preview
+### Task 5: Tally from what Program and Preview draw
 
 **Files:**
-- Modify: `plugins/omt-hx/omt-hx.cpp`
+- Modify: `breadstudio/omt-hx/omt-hx.cpp`
 
 **Interfaces:**
-- Consumes: `omthx::Receiver::setTally`.
-- Produces: OBS `activate`/`deactivate` (preview) and `show`/`hide` (program) map to the tally the receiver sends back.
+- Consumes: `omthx::Receiver::setTally`; `obs_get_output_source(0)`, `obs_source_enum_active_tree`, `obs_queue_task`; `obs_frontend_preview_program_mode_active`, `obs_frontend_get_current_preview_scene`.
+- Produces: the tally the receiver sends back, worked out ten times a second on the UI thread.
 
-- [ ] **Step 1: Track state and send the tally**
+OBS's own "active" and "showing" cannot be used. With the desk, the input bar and the multiview show every input all the time, and the audio bed keeps an input with AFV unlit active whatever is on Program (S1 spec §5.3). What is true instead:
 
+| Tally | True when |
+|---|---|
+| Program | The source is drawn by output channel 0: the transition that feeds Program. During a fade that covers both sides, so a camera stays red until it has left the picture. The audio bed is on another channel and does not count. |
+| Preview | Studio Mode is on and the source is drawn by the Preview scene. |
+
+"Drawn by" means a visible item at any depth: in the scene, in a scene that is a layer of it, or in a group. `obs_source_enum_active_tree` walks exactly that.
+
+- [ ] **Step 1: Work the tally out and send it when it changes**
+
+Add the include:
+```cpp
+#include <obs-frontend-api.h>
+```
 Add to `omt_source`:
 ```cpp
-	std::atomic<bool> active{false};   // in the main view: on program
-	std::atomic<bool> showing{false};  // shown in any view: program or studio preview
+	float tallyWait = 0.0f;   // seconds since the tally was last worked out; graphics thread only
+	bool tallySent = false;   // false until the receiver in rx has been told; guarded by rxMutex
+	omthx::Tally sentTally;   // guarded by rxMutex
 ```
-Add helpers:
+Add, inside the anonymous namespace, after `stop_receiver`:
 ```cpp
-namespace {
-// OBS reports "active" (in the main view, i.e. the program output) and "showing" (in any
-// view, which includes the studio-mode preview scene, the multiview and projectors). So
-// program follows activate, and preview is showing-but-not-program.
-void send_tally(omt_source *s) {
-	std::lock_guard lock(s->rxMutex);
-	if (!s->rx) return;
-	const bool program = s->active.load();
-	const bool preview = s->showing.load() && !program;
-	s->rx->setTally(omthx::Tally{.preview = preview, .program = program});
+// True when target is root, or a visible item of root at any depth.
+bool draws(obs_source_t *root, obs_source_t *target) {
+	if (!root) return false;
+	if (root == target) return true;
+	struct Search {
+		obs_source_t *target;
+		bool found;
+	} search{target, false};
+	obs_source_enum_active_tree(
+		root,
+		[](obs_source_t *, obs_source_t *child, void *param) {
+			auto *search = static_cast<Search *>(param);
+			if (child == search->target) search->found = true;
+		},
+		&search);
+	return search.found;
 }
 
-void omt_activate(void *data) {
-	auto *s = static_cast<omt_source *>(data);
-	s->active = true;
-	send_tally(s);
+// Runs on the UI thread, where the frontend API may be asked. param is a weak reference
+// to the source, taken by omt_tick; holding the source here keeps its data alive.
+void update_tally(void *param) {
+	auto *weak = static_cast<obs_weak_source_t *>(param);
+	obs_source_t *source = obs_weak_source_get_source(weak);
+	obs_weak_source_release(weak);
+	if (!source) return;
+
+	obs_source_t *program = obs_get_output_source(0);
+	obs_source_t *preview =
+		obs_frontend_preview_program_mode_active() ? obs_frontend_get_current_preview_scene() : nullptr;
+	const omthx::Tally tally{.preview = draws(preview, source), .program = draws(program, source)};
+	obs_source_release(program);
+	obs_source_release(preview);
+
+	auto *s = static_cast<omt_source *>(obs_obj_get_data(source));
+	if (s) {
+		std::lock_guard lock(s->rxMutex);
+		if (s->rx && (!s->tallySent || !(tally == s->sentTally))) {
+			s->rx->setTally(tally);
+			s->sentTally = tally;
+			s->tallySent = true;
+		}
+	}
+	obs_source_release(source);
 }
-void omt_deactivate(void *data) {
+
+// OBS calls this every frame for every source, shown or not.
+void omt_tick(void *data, float seconds) {
 	auto *s = static_cast<omt_source *>(data);
-	s->active = false;
-	send_tally(s);
+	s->tallyWait += seconds;
+	if (s->tallyWait < 0.1f) return;
+	s->tallyWait = 0.0f;
+	obs_queue_task(OBS_TASK_UI, update_tally, obs_source_get_weak_source(s->source), false);
 }
-void omt_show(void *data) {
-	auto *s = static_cast<omt_source *>(data);
-	s->showing = true;
-	send_tally(s);
-}
-void omt_hide(void *data) {
-	auto *s = static_cast<omt_source *>(data);
-	s->showing = false;
-	send_tally(s);
-}
-}  // namespace
 ```
-In `omt_update`, after `s->worker = std::thread(worker_main, s);`, re-send the current state: `send_tally(s);`.
-Add the four callbacks to `omt_hx_source`:
+A new receiver has not been told anything. In `omt_update`, where the receiver is stored, clear the flag under the same lock:
 ```cpp
-        .activate = omt_activate,
-        .deactivate = omt_deactivate,
-        .show = omt_show,
-        .hide = omt_hide,
+	{
+		std::lock_guard lock(s->rxMutex);
+		s->rx = std::move(rx);
+		s->tallySent = false;
+	}
+```
+Add the callback to `omt_hx_source`, between `.update` and `.icon_type` (declaration order):
+```cpp
+        .video_tick = omt_tick,
 ```
 
-- [ ] **Step 2: Build and smoke the return path**
+- [ ] **Step 2: Build**
 
 Run: `cmake --build --preset windows-x64 --target omt-hx`
-Add the source to a scene shown on program. On the BreadCamera side, its output's `tally` node (`outputs/<id>/tally`) must read `{"program":true,"preview":false}`; move the source to the preview scene in Studio mode and it must read `{"preview":true,...,"program":false}`. (`setTally` asks the far end; the far end is BreadCamera's `OmthOutput`, which publishes it.) Expected: the node flips with the scene.
+Expected: builds. An error about the order of designated initialisers means a field is out of the order in Global Constraints.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Smoke the return path, with the desk**
+
+Start a sender whose tally can be read: BreadCamera (its output's `tally` node, `outputs/<id>/tally`) or `omthx-send.exe`. Make two inputs on the desk: `Cam` (this source) and `Other` (Blank). Studio Mode on.
+
+| Do | The sender's tally reads |
+|---|---|
+| `Other` on Program and on Preview. `Cam` is only a tile in the bar. | program false, preview false |
+| Click `Cam`'s tile | preview true, program false |
+| Press Transition | program true |
+| Make `Box` (Blank) with `Cam` as a layer; put `Box` on Program and `Other` on Preview | program true |
+| Untick the `Cam` layer in `Box`'s settings | program false within a quarter of a second |
+| `Other` on Program and Preview; unlight AFV on `Cam`'s strip | program false: the audio bed does not light the tally |
+| Fade duration 3000 ms; `Cam` on Program, `Other` on Preview; press Transition | program stays true until the fade ends, then false |
+| Studio Mode off; click `Cam`'s tile | program true, preview false |
+
+- [ ] **Step 4: Commit**
 
 ```powershell
-git add plugins/omt-hx/omt-hx.cpp
+git add breadstudio/omt-hx/omt-hx.cpp
 git commit -m "breadstudio: send program and preview tally to the OMT sender"
 ```
 
 ---
 
-### Task 6: Acceptance and the smoke checklist
+### Task 6: The desk's Add menu lists it
+
+**Files:**
+- Modify: `breadstudio/desk/InputBar.cpp`, `breadstudio/desk/data/locale/en-US.ini`
+
+**Interfaces:**
+- Consumes: the source id `omt_hx_source` from Task 1; the desk's table of base types behind its Add menu (S1 spec §3).
+- Produces: an "OMT source" entry in the Add menu, which makes an input whose base is this source.
+
+- [ ] **Step 1: Add the type**
+
+In `breadstudio/desk/InputBar.cpp`, in the table `types[]` behind the Add menu, add a row after the camera's:
+```cpp
+		{"Type.Omt", "omt_hx_source", false},
+```
+In `breadstudio/desk/data/locale/en-US.ini`, after `Type.Camera`:
+```ini
+Type.Omt="OMT source"
+```
+The menu already leaves out a type that is not registered, so a build without this plugin shows no dead entry.
+
+- [ ] **Step 2: Build and check by hand**
+
+Run `breadstudio/build.ps1`, then start the program with a sender running.
+
+| Do | Expect |
+|---|---|
+| Open the Add menu | "OMT source" is listed after "Camera". |
+| Choose it | A new tile, last, on Preview. OBS's properties window opens with the discovered sources. |
+| Pick the sender, OK | The tile shows the picture. The mixer has a strip for it with AFV lit. |
+| Close and restart | The tile and its picture come back. |
+
+- [ ] **Step 3: Commit**
+
+```powershell
+git add breadstudio/desk
+git commit -m "breadstudio: list the OMT source in the desk's Add menu"
+```
+
+---
+
+### Task 7: Acceptance and the smoke checklist
 
 **Files:**
 - Create if absent, else modify: `breadstudio/docs/SMOKE.md`
@@ -596,8 +713,9 @@ Create `breadstudio/docs/SMOKE.md` if it does not exist; append this section (ke
 2. Add `OMT-HX Source`; refresh and pick the source; the picture appears within 2 s.
 3. With alpha on the sender, the picture shows the keyed edges.
 4. Audio meters move.
-5. Studio mode: put the source on program, then preview; BreadCamera's output `tally` follows.
+5. Tally: the eight rows of the table in this plan's Task 5 Step 3. A camera that is only a tile in the bar reads neither; one with AFV unlit and something else on Program reads neither.
 6. Stop the sender; OBS stays responsive; restart it; the picture returns.
+7. The desk's Add menu lists "OMT source", and an input made from it comes back after a restart.
 ```
 
 - [ ] **Step 2: Confirm the edits list is complete and green**
@@ -607,11 +725,11 @@ Run:
 git add breadstudio
 powershell -NoProfile -ExecutionPolicy Bypass -File breadstudio\check-edits.ps1
 ```
-Expected: passes. `UPSTREAM-EDITS.md` must list `plugins/CMakeLists.txt` (edited) and each of `plugins/omt-hx/CMakeLists.txt`, `plugins/omt-hx/omt-hx.cpp`, `plugins/omt-hx/data/locale/en-US.ini` (added).
+Expected: passes. `UPSTREAM-EDITS.md` lists `plugins/CMakeLists.txt` under Edited, with a reason that names both plugins, and nothing new under Added.
 
 - [ ] **Step 3: Full build and smoke**
 
-Run `breadstudio/build.ps1`, then run OBS and walk the six smoke steps. Expected: all six hold.
+Run `breadstudio/build.ps1`, then run OBS and walk the seven smoke steps. Expected: all seven hold.
 
 - [ ] **Step 4: Commit**
 
