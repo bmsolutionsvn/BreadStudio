@@ -8,6 +8,7 @@
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
 #include "Desk.hpp"
+#include "DeskLayout.hpp"
 #include "InputBar.hpp"
 #include "InputModel.hpp"
 #include "Mixer.hpp"
@@ -71,6 +72,9 @@ static void onEvent(enum obs_frontend_event event, void *)
 {
 	switch (event) {
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		load();
+		applyLayoutOnFirstRun();
+		break;
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
 		load();
 		break;
@@ -159,6 +163,8 @@ bool obs_module_load(void)
 							       (void *)(uintptr_t)i);
 	}
 	obs_frontend_add_save_callback(saveNumberHotkeys, nullptr);
+
+	obs_frontend_add_tools_menu_item(obs_module_text("DeskLayout"), [](void *) { applyLayout(); }, nullptr);
 
 	blog(LOG_INFO, "[bread-desk] loaded");
 	return true;

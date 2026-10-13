@@ -30,6 +30,8 @@ target_sources(
     AudioBed.hpp
     BusMeters.cpp
     BusMeters.hpp
+    DeskLayout.cpp
+    DeskLayout.hpp
     InputBar.cpp
     InputBar.hpp
     InputModel.cpp

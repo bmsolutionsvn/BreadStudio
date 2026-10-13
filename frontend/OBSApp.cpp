@@ -355,7 +355,7 @@ void OBSApp::InitUserConfigDefaults()
 
 	config_set_default_bool(userConfig, "BasicWindow", "PreviewEnabled", true);
 	config_set_default_bool(userConfig, "BasicWindow", "PreviewProgramMode", false);
-	config_set_default_bool(userConfig, "BasicWindow", "SceneDuplicationMode", true);
+	config_set_default_bool(userConfig, "BasicWindow", "SceneDuplicationMode", false);
 	config_set_default_bool(userConfig, "BasicWindow", "SwapScenesMode", true);
 	config_set_default_bool(userConfig, "BasicWindow", "SnappingEnabled", true);
 	config_set_default_bool(userConfig, "BasicWindow", "ScreenSnapping", true);
