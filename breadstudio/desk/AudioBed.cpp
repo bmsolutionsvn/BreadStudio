@@ -1,0 +1,149 @@
+#include "AudioBed.hpp"
+#include "InputModel.hpp"
+
+#include <obs-frontend-api.h>
+#include <graphics/vec2.h>
+
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+namespace desk {
+
+static const char *AfvKey = "bread_afv";
+
+/* OBS's frontend uses channels 0 to 6. The bed takes the highest free one. */
+static const uint32_t FirstChannel = MAX_CHANNELS - 1;
+static const uint32_t LastChannel = 7;
+
+/* far outside any canvas, so the bed draws nothing */
+static const float OffCanvas = 100000.0f;
+
+AudioBed &bed()
+{
+	static AudioBed instance;
+	return instance;
+}
+
+bool AudioBed::afv(obs_source_t *input)
+{
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	if (obs_data_has_user_value(settings, AfvKey)) {
+		return obs_data_get_bool(settings, AfvKey);
+	}
+
+	/* default: an input with a picture follows video; an audio-only input is always on */
+	OBSSource base = baseSource(input);
+	return base && (obs_source_get_output_flags(base) & OBS_SOURCE_VIDEO) != 0;
+}
+
+void AudioBed::setAfv(obs_source_t *input, bool on)
+{
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	obs_data_set_bool(settings, AfvKey, on);
+	sync();
+	obs_frontend_save();
+}
+
+void AudioBed::rebuild()
+{
+	clear();
+
+	for (uint32_t candidate = FirstChannel; candidate >= LastChannel; candidate--) {
+		OBSSourceAutoRelease taken = obs_get_output_source(candidate);
+		if (!taken) {
+			channel = candidate;
+			break;
+		}
+	}
+
+	if (channel == 0) {
+		blog(LOG_ERROR, "[bread-desk] no free output channel for the audio bed; AFV off will not work");
+		return;
+	}
+	if (channel != FirstChannel) {
+		blog(LOG_INFO, "[bread-desk] audio bed is on output channel %u", channel);
+	}
+
+	scene = obs_scene_create_private("Bread audio bed");
+	obs_set_output_source(channel, obs_scene_get_source(scene));
+	sync();
+}
+
+void AudioBed::clear()
+{
+	if (!scene) {
+		return;
+	}
+
+	/* OBS may already have emptied every channel; only take down what is still ours */
+	OBSSourceAutoRelease current = obs_get_output_source(channel);
+	if (current.Get() == obs_scene_get_source(scene)) {
+		obs_set_output_source(channel, nullptr);
+	}
+
+	scene = nullptr;
+	channel = 0;
+}
+
+void AudioBed::sync()
+{
+	if (!scene) {
+		return;
+	}
+
+	/* the bases that should be in the bed */
+	std::unordered_set<std::string> wanted;
+	std::vector<OBSSource> wantedSources;
+	for (OBSSource &input : inputs()) {
+		if (afv(input)) {
+			continue;
+		}
+		OBSSource base = baseSource(input);
+		if (!hasAudio(base)) {
+			continue;
+		}
+		if (wanted.insert(obs_source_get_uuid(base)).second) {
+			wantedSources.push_back(base);
+		}
+	}
+
+	/* what is in the bed now */
+	struct Found {
+		const std::unordered_set<std::string> *wanted;
+		std::unordered_set<std::string> present;
+		std::vector<OBSSceneItem> extra;
+	} found;
+	found.wanted = &wanted;
+
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			auto *found = static_cast<Found *>(param);
+			std::string uuid = obs_source_get_uuid(obs_sceneitem_get_source(item));
+			if (found->wanted->count(uuid)) {
+				found->present.insert(uuid);
+			} else {
+				found->extra.emplace_back(item);
+			}
+			return true;
+		},
+		&found);
+
+	/* change only what differs, so an input that stays in the bed is not interrupted */
+	for (OBSSceneItem &item : found.extra) {
+		obs_sceneitem_remove(item);
+	}
+
+	for (OBSSource &base : wantedSources) {
+		if (found.present.count(obs_source_get_uuid(base))) {
+			continue;
+		}
+		obs_sceneitem_t *item = obs_scene_add(scene, base);
+		struct vec2 pos;
+		vec2_set(&pos, OffCanvas, OffCanvas);
+		obs_sceneitem_set_pos(item, &pos);
+	}
+}
+
+} // namespace desk

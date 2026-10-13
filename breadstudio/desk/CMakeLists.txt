@@ -23,7 +23,18 @@ set_target_properties_obs(
              AUTORCC ON
 )
 
-target_sources(bread-desk PRIVATE LayerGraph.cpp LayerGraph.hpp)
+target_sources(
+  bread-desk
+  PRIVATE
+    AudioBed.cpp
+    AudioBed.hpp
+    BusMeters.cpp
+    BusMeters.hpp
+    InputModel.cpp
+    InputModel.hpp
+    LayerGraph.cpp
+    LayerGraph.hpp
+)
 
 # The one automated test: no OBS, no Qt.
 add_executable(bread-desk-test test/LayerGraphTest.cpp LayerGraph.cpp)
