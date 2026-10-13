@@ -2,6 +2,8 @@
 
 #include <obs.hpp>
 
+#include "LayerGraph.hpp"
+
 #include <vector>
 
 namespace desk {
@@ -28,5 +30,29 @@ void onTransitionStopped();
 
 /* drop every reference the model holds; safe to call twice */
 void clearModel();
+
+/* every input's uuid -> the uuids of the scenes it holds as items */
+LayerGraph graph();
+
+/* A new input with that base, placed last. `unversionedId` is an OBS source type such as
+ * "dshow_input". Null when the type does not exist on this machine. */
+OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *settings);
+
+/* false when the name is empty or already used by any source */
+bool renameInput(obs_source_t *input, const char *name);
+
+enum class DeleteCheck { Ok, OnProgram, LastInput };
+DeleteCheck canDelete(obs_source_t *input);
+
+/* how many other inputs hold this one as a layer */
+int layerUseCount(obs_source_t *input);
+
+/* removes the input and every layer that shows it. Check canDelete first. */
+void deleteInput(obs_source_t *input);
+
+/* Reordering goes through OBS's scene list widget, found by name (spec §6.2).
+ * canReorder is false when the widget is not found. */
+bool canReorder();
+bool moveInput(int from, int to);
 
 } // namespace desk
