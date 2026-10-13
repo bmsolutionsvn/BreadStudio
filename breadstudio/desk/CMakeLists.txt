@@ -38,6 +38,10 @@ target_sources(
     InputSettings.hpp
     LayerGraph.cpp
     LayerGraph.hpp
+    Meter.cpp
+    Meter.hpp
+    Mixer.cpp
+    Mixer.hpp
     TileDisplay.cpp
     TileDisplay.hpp
 )

@@ -4,13 +4,13 @@
 
 #include <QApplication>
 #include <QString>
-#include <QTimer>
 
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
 #include "Desk.hpp"
 #include "InputBar.hpp"
 #include "InputModel.hpp"
+#include "Mixer.hpp"
 
 #include <vector>
 
@@ -29,6 +29,8 @@ static bool loaded = false;
 
 static InputBar *bar = nullptr; /* owned by its dock */
 
+static Mixer *mixer = nullptr; /* owned by its dock */
+
 namespace desk {
 void inputsChanged()
 {
@@ -37,6 +39,7 @@ void inputsChanged()
 	}
 	bed().sync();
 	bar->refresh();
+	mixer->rebuild();
 }
 } // namespace desk
 
@@ -52,12 +55,14 @@ static void load()
 	loaded = true;
 	bed().rebuild();
 	bar->refresh();
+	mixer->rebuild();
 }
 
 static void unload()
 {
 	loaded = false;
 	bar->clear();
+	mixer->clear();
 	clearModel();
 	bed().clear();
 }
@@ -97,39 +102,6 @@ static void onEvent(enum obs_frontend_event event, void *)
 		break;
 	}
 }
-
-/* ---- temporary probe for the audio bed check; removed in the mixer task ---- */
-
-static void probeToggleAfv(void *)
-{
-	OBSSourceAutoRelease input = obs_frontend_get_current_preview_scene();
-	if (!input) {
-		input = obs_frontend_get_current_scene();
-	}
-	if (!input) {
-		return;
-	}
-
-	const bool on = !AudioBed::afv(input);
-	bed().setAfv(input, on);
-	blog(LOG_INFO, "[bread-desk] probe: AFV of '%s' is now %s", obs_source_get_name(input), on ? "on" : "off");
-}
-
-static void probeLogPeaks(void *)
-{
-	/* throw away what has built up, then measure one second */
-	for (size_t bus = 0; bus < MAX_AUDIO_MIXES; bus++) {
-		busMeters().takePeakDb(bus);
-	}
-	QTimer::singleShot(1000, [] {
-		for (size_t bus = 0; bus < MAX_AUDIO_MIXES; bus++) {
-			blog(LOG_INFO, "[bread-desk] probe: bus %c peak %.1f dB", "MABCDE"[bus],
-			     (double)busMeters().takePeakDb(bus));
-		}
-	});
-}
-
-/* ---- end of probe ---- */
 
 /* "Input N to Preview": follows the number, not the scene (spec §4.6). OBS keeps
  * plugin hotkey bindings with the scene collection. */
@@ -173,12 +145,12 @@ bool obs_module_load(void)
 
 	bar = new InputBar();
 	obs_frontend_add_dock_by_id(InputsDockId, obs_module_text("Inputs"), bar);
+
+	mixer = new Mixer();
+	obs_frontend_add_dock_by_id(MixerDockId, obs_module_text("Mixer"), mixer);
 	signal_handler_connect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
 
 	obs_frontend_add_event_callback(onEvent, nullptr);
-
-	obs_frontend_add_tools_menu_item("Desk probe: toggle AFV of the Preview input", probeToggleAfv, nullptr);
-	obs_frontend_add_tools_menu_item("Desk probe: log bus peaks", probeLogPeaks, nullptr);
 
 	for (size_t i = 0; i < NumberHotkeys; i++) {
 		const QByteArray name = QString("BreadDesk.InputToPreview.%1").arg(i + 1).toUtf8();
