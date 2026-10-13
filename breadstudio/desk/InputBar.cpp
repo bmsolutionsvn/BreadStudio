@@ -111,7 +111,7 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 
 	connect(display, &TileDisplay::menuRequested, this, &InputBar::showMenu);
 	connect(display, &TileDisplay::moved, this, [](int from, int to) {
-		if (moveInput(from, to)) {
+		if (canReorder() && moveInput(from, to)) {
 			inputsChanged();
 		}
 	});
