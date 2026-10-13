@@ -90,6 +90,12 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
 		inputsChanged();
 		break;
+	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		bar->updateOutputs();
+		break;
 	case OBS_FRONTEND_EVENT_TRANSITION_STOPPED:
 		onTransitionStopped();
 		bar->updateTally();

@@ -10,6 +10,7 @@ namespace desk {
 
 inline constexpr const char *InputsDockId = "breadDeskInputs";
 inline constexpr const char *MixerDockId = "breadDeskMixer";
+inline constexpr const char *FooterId = "breadDeskFooter";
 
 /* the values OBS's multiview uses */
 inline constexpr uint32_t ProgramColor = 0xFFD00000;

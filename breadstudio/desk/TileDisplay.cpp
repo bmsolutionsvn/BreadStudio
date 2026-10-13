@@ -77,7 +77,7 @@ void TileDisplay::resizeEvent(QResizeEvent *event)
 	}
 }
 
-void TileDisplay::setInputs(const std::vector<OBSSource> &inputs)
+void TileDisplay::setInputs(const std::vector<OBSSource> &inputs, int firstPlace)
 {
 	/* a source drawn in a display must be marked as showing, or cameras stay off */
 	std::vector<Tile> next;
@@ -96,6 +96,7 @@ void TileDisplay::setInputs(const std::vector<OBSSource> &inputs)
 	}
 
 	count = (int)inputs.size();
+	first = firstPlace;
 	setFixedSize(std::max(1, count) * TileW, TileH);
 }
 
@@ -162,17 +163,18 @@ void TileDisplay::draw(void *param, uint32_t cx, uint32_t cy)
 	}
 }
 
-int TileDisplay::indexAt(const QPoint &pos) const
+int TileDisplay::indexAtGlobal(const QPoint &globalPos) const
 {
-	if (count == 0) {
+	const QPoint pos = mapFromGlobal(globalPos);
+	if (count == 0 || !rect().contains(pos)) {
 		return -1;
 	}
-	return std::clamp(pos.x() / TileW, 0, count - 1);
+	return first + std::min(pos.x() / TileW, count - 1);
 }
 
 void TileDisplay::mousePressEvent(QMouseEvent *event)
 {
-	const int index = indexAt(event->position().toPoint());
+	const int index = indexAtGlobal(event->globalPosition().toPoint());
 	if (index < 0) {
 		return;
 	}
@@ -193,12 +195,13 @@ void TileDisplay::mouseReleaseEvent(QMouseEvent *event)
 	const int from = pressed;
 	pressed = -1;
 
-	/* released on the tile it was pressed on: a click. On another: a drag. */
-	const int to = indexAt(event->position().toPoint());
-	if (to == from) {
+	/* released on the tile it was pressed on: a click. Anywhere else: a drag, which the
+	 * input bar resolves, because the target may be in another row. */
+	const QPoint globalPos = event->globalPosition().toPoint();
+	if (indexAtGlobal(globalPos) == from) {
 		emit clicked(from);
-	} else if (to >= 0) {
-		emit moved(from, to);
+	} else {
+		emit dragged(from, globalPos);
 	}
 }
 

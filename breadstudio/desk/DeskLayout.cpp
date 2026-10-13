@@ -49,13 +49,13 @@ bool applyLayout()
 		dock->setVisible(true);
 	}
 
-	/* the input bar across the width; under it the mixer, then OBS's Scene Transitions
-	 * (the transition and its duration are chosen there) and Controls to its right */
-	main->splitDockWidget(inputs, mixer, Qt::Vertical);
+	/* as vMix: the input bar on the left, the mixer docked to its right, then OBS's Scene
+	 * Transitions (the transition and its duration are chosen there) and Controls */
+	main->splitDockWidget(inputs, mixer, Qt::Horizontal);
 	main->splitDockWidget(mixer, transitions, Qt::Horizontal);
 	main->splitDockWidget(transitions, controls, Qt::Horizontal);
-	main->resizeDocks({inputs, mixer}, {150, 260}, Qt::Vertical);
-	main->resizeDocks({mixer, transitions, controls}, {600, 200, 200}, Qt::Horizontal);
+	main->resizeDocks({inputs, mixer, transitions, controls}, {900, 420, 160, 160}, Qt::Horizontal);
+	main->resizeDocks({inputs}, {320}, Qt::Vertical);
 
 	return true;
 }
