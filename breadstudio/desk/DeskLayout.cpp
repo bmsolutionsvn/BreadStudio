@@ -32,7 +32,8 @@ bool applyLayout()
 	QDockWidget *sources = find("sourcesDock");
 	QDockWidget *obsMixer = find("mixerDock");
 	QDockWidget *controls = find("controlsDock");
-	if (!inputs || !mixer || !scenes || !sources || !obsMixer || !controls) {
+	QDockWidget *transitions = find("transitionsDock");
+	if (!inputs || !mixer || !scenes || !sources || !obsMixer || !controls || !transitions) {
 		return false;
 	}
 
@@ -42,16 +43,19 @@ bool applyLayout()
 	sources->setVisible(false);
 	obsMixer->setVisible(false);
 
-	for (QDockWidget *dock : {inputs, mixer, controls}) {
+	for (QDockWidget *dock : {inputs, mixer, transitions, controls}) {
 		dock->setFloating(false);
 		main->addDockWidget(Qt::BottomDockWidgetArea, dock);
 		dock->setVisible(true);
 	}
 
-	/* the input bar across the width; under it the mixer, with OBS's Controls to its right */
+	/* the input bar across the width; under it the mixer, then OBS's Scene Transitions
+	 * (the transition and its duration are chosen there) and Controls to its right */
 	main->splitDockWidget(inputs, mixer, Qt::Vertical);
-	main->splitDockWidget(mixer, controls, Qt::Horizontal);
+	main->splitDockWidget(mixer, transitions, Qt::Horizontal);
+	main->splitDockWidget(transitions, controls, Qt::Horizontal);
 	main->resizeDocks({inputs, mixer}, {150, 260}, Qt::Vertical);
+	main->resizeDocks({mixer, transitions, controls}, {600, 200, 200}, Qt::Horizontal);
 
 	return true;
 }

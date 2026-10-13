@@ -17,9 +17,9 @@ public:
 	InputSettings(obs_source_t *input, QWidget *parent);
 
 	obs_source_t *input() const { return source; }
+	void reload(); /* read the layers again */
 
 private:
-	void reload();
 	int64_t selected() const;
 
 	OBSSource source;

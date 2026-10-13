@@ -9,6 +9,7 @@
 
 class QFrame;
 class QHBoxLayout;
+class QScrollArea;
 
 namespace desk {
 
@@ -40,6 +41,7 @@ private:
 
 	QFrame *warning;
 	QHBoxLayout *row; /* the scroll area, then whatever later tasks add */
+	QScrollArea *scroll;
 	TileDisplay *display;
 	QHBoxLayout *footerRow;
 	std::vector<OBSSource> sources;

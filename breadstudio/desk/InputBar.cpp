@@ -14,6 +14,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -26,6 +27,13 @@ static const char *AudioGlyph = "\xE2\x99\xAA";
 
 /* U+2699, the gear */
 static const char *GearGlyph = "\xE2\x9A\x99";
+
+/* The settings windows belong to OBS's main window, not to this dock: Qt wants a top-level
+ * window behind a dialog, and a floating dock is a different one from a docked one. */
+static QWidget *settingsParent()
+{
+	return static_cast<QWidget *>(obs_frontend_get_main_window());
+}
 
 /* runs on whichever thread changed the mute state */
 static void onMute(void *param, calldata_t *)
@@ -53,7 +61,7 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	row = new QHBoxLayout();
 	outer->addLayout(row, 1);
 
-	auto *scroll = new QScrollArea(this);
+	scroll = new QScrollArea(this);
 	scroll->setFrameShape(QFrame::NoFrame);
 	scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	row->addWidget(scroll, 1);
@@ -96,16 +104,21 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 		{"Type.Audio", "wasapi_input_capture", false},
 	};
 
+	/* filled when it opens: this dock is made while OBS is still loading modules, before
+	 * the plugins that own these types have registered them */
 	auto *add = new QPushButton(text("Add"), this);
 	auto *addMenu = new QMenu(add);
-	for (const InputType &type : types) {
-		if (!obs_get_latest_input_type_id(type.id)) {
-			continue;
+	connect(addMenu, &QMenu::aboutToShow, this, [this, addMenu] {
+		addMenu->clear();
+		for (const InputType &type : types) {
+			if (!obs_get_latest_input_type_id(type.id)) {
+				continue;
+			}
+			QAction *action = addMenu->addAction(text(type.textKey));
+			connect(action, &QAction::triggered, this,
+				[this, type] { addInput(type.textKey, type.id, type.blank); });
 		}
-		QAction *action = addMenu->addAction(text(type.textKey));
-		connect(action, &QAction::triggered, this,
-			[this, type] { addInput(type.textKey, type.id, type.blank); });
-	}
+	});
 	add->setMenu(addMenu);
 	row->addWidget(add, 0, Qt::AlignTop);
 
@@ -184,11 +197,13 @@ void InputBar::refresh()
 	sources = inputs();
 
 	/* close the settings window of an input that no longer exists */
-	for (InputSettings *open : findChildren<InputSettings *>()) {
+	for (InputSettings *open : settingsParent()->findChildren<InputSettings *>()) {
 		const bool alive = std::any_of(sources.begin(), sources.end(),
 					       [open](const OBSSource &input) { return input.Get() == open->input(); });
 		if (!alive) {
 			delete open;
+		} else {
+			open->reload(); /* a layer's input may have been renamed or deleted */
 		}
 	}
 
@@ -202,6 +217,11 @@ void InputBar::refresh()
 
 	display->setInputs(sources);
 	updateTally();
+
+	/* there is no vertical scroll bar, so the dock must not get shorter than a tile with
+	 * its buttons, plus the horizontal scroll bar that appears when the tiles overflow */
+	scroll->setMinimumHeight(scroll->widget()->sizeHint().height() +
+				 scroll->horizontalScrollBar()->sizeHint().height());
 }
 
 void InputBar::updateTally()
@@ -230,7 +250,7 @@ void InputBar::updateTally()
 
 void InputBar::clear()
 {
-	qDeleteAll(findChildren<InputSettings *>());
+	qDeleteAll(settingsParent()->findChildren<InputSettings *>());
 	muteSignals.clear();
 	sources.clear();
 	while (QLayoutItem *item = footerRow->takeAt(0)) {
@@ -298,7 +318,7 @@ void InputBar::renameDialog(obs_source_t *input)
 	const QString current = QString::fromUtf8(obs_source_get_name(input));
 
 	bool accepted = false;
-	const QString name = QInputDialog::getText(this, text("Rename"), text("Rename.Prompt"), QLineEdit::Normal,
+	const QString name = QInputDialog::getText(window(), text("Rename"), text("Rename.Prompt"), QLineEdit::Normal,
 						   current, &accepted)
 				     .trimmed();
 	if (!accepted || name == current) {
@@ -306,7 +326,7 @@ void InputBar::renameDialog(obs_source_t *input)
 	}
 
 	if (!renameInput(input, name.toUtf8().constData())) {
-		QMessageBox::warning(this, text("Rename"), text("Rename.Taken"));
+		QMessageBox::warning(window(), text("Rename"), text("Rename.Taken"));
 		return;
 	}
 	inputsChanged();
@@ -316,10 +336,10 @@ void InputBar::deleteDialog(obs_source_t *input)
 {
 	switch (canDelete(input)) {
 	case DeleteCheck::OnProgram:
-		QMessageBox::warning(this, text("Delete"), text("Delete.OnProgram"));
+		QMessageBox::warning(window(), text("Delete"), text("Delete.OnProgram"));
 		return;
 	case DeleteCheck::LastInput:
-		QMessageBox::warning(this, text("Delete"), text("Delete.Last"));
+		QMessageBox::warning(window(), text("Delete"), text("Delete.Last"));
 		return;
 	case DeleteCheck::Ok:
 		break;
@@ -329,7 +349,7 @@ void InputBar::deleteDialog(obs_source_t *input)
 	const int hosts = layerUseCount(input);
 	const QString question = hosts > 0 ? text("Delete.ConfirmLayers").arg(name).arg(hosts)
 					   : text("Delete.Confirm").arg(name);
-	if (QMessageBox::question(this, text("Delete"), question) != QMessageBox::Yes) {
+	if (QMessageBox::question(window(), text("Delete"), question) != QMessageBox::Yes) {
 		return;
 	}
 
@@ -344,7 +364,7 @@ void InputBar::openSettings(int index)
 	}
 	obs_source_t *input = sources[(size_t)index];
 
-	for (InputSettings *open : findChildren<InputSettings *>()) {
+	for (InputSettings *open : settingsParent()->findChildren<InputSettings *>()) {
 		if (open->input() == input) {
 			open->raise();
 			open->activateWindow();
@@ -352,7 +372,7 @@ void InputBar::openSettings(int index)
 		}
 	}
 
-	(new InputSettings(input, this))->show();
+	(new InputSettings(input, settingsParent()))->show();
 }
 
 } // namespace desk

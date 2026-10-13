@@ -65,6 +65,7 @@ bool hasAudio(obs_source_t *source)
 static OBSSource restoreTransition;
 static OBSSource restorePreview;
 static bool restorePending = false;
+static int restoreTries = 0;
 
 void toPreview(obs_source_t *input)
 {
@@ -113,9 +114,8 @@ void cutToProgram(obs_source_t *input)
 	if (!current) {
 		return;
 	}
-	const float time = obs_transition_get_time(current);
-	if (time > 0.0f && time < 1.0f) {
-		return; /* a transition is running; OBS ignores a new one */
+	if (obs_transition_is_active(current)) {
+		return; /* a transition is running; OBS ignores a new one, and a change of transition */
 	}
 
 	OBSSourceAutoRelease preview = obs_frontend_get_current_preview_scene();
@@ -128,6 +128,7 @@ void cutToProgram(obs_source_t *input)
 	}
 
 	restorePending = true;
+	restoreTries = 0;
 	obs_frontend_set_current_scene(input);
 
 	/* in case the stop event never comes */
@@ -137,6 +138,15 @@ void cutToProgram(obs_source_t *input)
 void onTransitionStopped()
 {
 	if (!restorePending) {
+		return;
+	}
+
+	/* OBS raises "stopped" when the picture has switched, but refuses a change of
+	 * transition until the audio side has stopped too, a moment later. Wait for it, for
+	 * two seconds at most. */
+	OBSSourceAutoRelease running = obs_frontend_get_current_transition();
+	if (running && obs_transition_is_active(running) && restoreTries++ < 100) {
+		QTimer::singleShot(20, [] { onTransitionStopped(); });
 		return;
 	}
 	restorePending = false;
