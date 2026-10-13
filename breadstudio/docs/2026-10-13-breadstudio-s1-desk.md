@@ -10,6 +10,37 @@
 
 **Spec:** `breadstudio/docs/2026-10-13-breadstudio-s1-desk-design.md`. Read it before any task. Section numbers below (§) refer to it.
 
+## Status (2026-10-14)
+
+All nine tasks are built and committed. The checks by hand in Tasks 4 to 8 were run for the first time on 2026-10-14, on the build folder; the first run found five defects, which are fixed in `f92157f57`:
+
+| Found by | Defect | Fix |
+|---|---|---|
+| Task 5 Step 7 | "+ Add" opened no menu: the dock is made before the plugins that own the input types have loaded, so every type was skipped. | The menu is filled when it opens. |
+| Task 4 Step 8 | A tile's Cut sometimes left the Cut transition selected: OBS refuses a change of transition until the audio side of the cut has stopped. | The restore waits for that. |
+| Task 4 Step 8 | The buttons under the tiles were cut off. | The bar's scroll area has a minimum height. |
+| Task 8 Step 5 | OBS's Scene Transitions dock sat beside the input bar, so the bar was not across the width. | The layout puts it between the mixer and Controls. |
+| Task 6 Step 6 | An open settings window kept a layer after that layer's input was renamed or deleted. | The window reads its layers again when the inputs change. |
+
+With those fixes every row of every table in Task 4 Step 8, Task 5 Step 7, Task 6 Step 6, Task 7 Step 6 and Task 8 Step 5 passes. The tables were worked by posted clicks, with OBS's state read back through its websocket, and two rows were not run as written:
+
+- Task 5 Step 7, the hotkey row: "Input 2 to Preview" was triggered through OBS, not bound to a key and pressed.
+- Task 7 Step 6, the microphone row: the new strip is there with AFV unlit and its source is live whatever is on Program, but nobody spoke into it.
+
+The audio bed readings (Task 3 Step 8, Task 7 Step 6) are -12.0 dB on bus M for all three of A, B and C.
+
+**Still open**
+
+- Task 9 Step 4, the owner gate: `DESK-SMOKE.md` with two cameras, a microphone and a second monitor. The run of 2026-10-14 used stand-ins and is recorded in that file.
+- The two things owed to S0, at the end of this plan.
+
+**Seen, not changed** (each is OBS's own behaviour, or outside the spec):
+
+- After Scene Collection → New in Studio Mode, OBS has no Program scene and no quick transition buttons until the first cut. Stock OBS 32.2.2 does the same.
+- During a fade the bar keeps the old frames until the fade has finished; OBS's own state names the new Program from the start.
+- An input's base keeps the name it was made with ("Media file source 2") after the input is renamed. It shows only in OBS's own windows, such as Advanced Audio Properties.
+- The mixer's strips share their dock with the six bus columns. In a dock under about 400 px wide only one strip shows without scrolling.
+
 ## Global Constraints
 
 - Base: OBS Studio tag `32.2.2`. Branch: `s1-desk` (already created from `main`). Local path `F:\Coding\BreadMedia\BreadStudio`.
@@ -102,7 +133,7 @@ Task order and why: 1 makes the plugin build and load. 2 is the pure loop check.
 - Consumes: nothing.
 - Produces: `desk::text(const char *key) -> QString`; `desk::InputsDockId`, `desk::MixerDockId`; `desk::ProgramColor`, `desk::PreviewColor`, `desk::IdleColor`; the CMake target `bread-desk`, to which later tasks add sources.
 
-- [ ] **Step 1: Write the CMake file**
+- [x] **Step 1: Write the CMake file**
 
 `breadstudio/desk/CMakeLists.txt`:
 
@@ -133,7 +164,7 @@ set_target_properties_obs(
 )
 ```
 
-- [ ] **Step 2: Write the version resource**
+- [x] **Step 2: Write the version resource**
 
 `breadstudio/desk/cmake/windows/obs-module.rc.in`:
 
@@ -164,7 +195,7 @@ BEGIN
 END
 ```
 
-- [ ] **Step 3: Write every user-visible string**
+- [x] **Step 3: Write every user-visible string**
 
 `breadstudio/desk/data/locale/en-US.ini` (later tasks use these keys; none is added later):
 
@@ -209,7 +240,7 @@ DeskLayout="Desk layout"
 Hotkey.InputToPreview="Input %1 to Preview"
 ```
 
-- [ ] **Step 4: Write the shared header**
+- [x] **Step 4: Write the shared header**
 
 `breadstudio/desk/Desk.hpp`:
 
@@ -240,7 +271,7 @@ inline QString text(const char *key)
 } // namespace desk
 ```
 
-- [ ] **Step 5: Write the module entry**
+- [x] **Step 5: Write the module entry**
 
 `breadstudio/desk/desk.cpp`:
 
@@ -262,7 +293,7 @@ bool obs_module_load(void)
 }
 ```
 
-- [ ] **Step 6: Add the plugin to OBS's build**
+- [x] **Step 6: Add the plugin to OBS's build**
 
 Append this as the last line of `plugins/CMakeLists.txt`:
 
@@ -276,7 +307,7 @@ In `breadstudio/UPSTREAM-EDITS.md`, under `## Edited`, add:
 - `plugins/CMakeLists.txt` - one line that adds breadstudio/desk to the build
 ```
 
-- [ ] **Step 7: Build**
+- [x] **Step 7: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0, and both of these exist:
@@ -288,12 +319,12 @@ Test-Path build_x64\rundir\RelWithDebInfo\data\obs-plugins\bread-desk\locale\en-
 
 Expected: `True` twice.
 
-- [ ] **Step 8: Run and read the log**
+- [x] **Step 8: Run and read the log**
 
 Start the program (Global Constraints), close it, read the log.
 Expected: a line containing `[bread-desk] loaded`, and `Number of memory leaks: 0`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add -A
@@ -320,7 +351,7 @@ Expected from the check: `UPSTREAM-EDITS.md matches the 2 file(s) changed since 
   - `bool desk::reaches(const LayerGraph &graph, const std::string &from, const std::string &to)` — true when `to` is `from`, or is shown inside `from` through any depth of layers.
   - `bool desk::wouldLoop(const LayerGraph &graph, const std::string &host, const std::string &layer)` — true when adding `layer` on `host` would make an input contain itself.
 
-- [ ] **Step 1: Write the header and a stub**
+- [x] **Step 1: Write the header and a stub**
 
 `breadstudio/desk/LayerGraph.hpp`:
 
@@ -363,7 +394,7 @@ bool reaches(const LayerGraph &, const std::string &, const std::string &)
 } // namespace desk
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 `breadstudio/desk/test/LayerGraphTest.cpp`:
 
@@ -455,7 +486,7 @@ set_target_properties(
 )
 ```
 
-- [ ] **Step 3: Run the test and see it fail**
+- [x] **Step 3: Run the test and see it fail**
 
 ```powershell
 .\breadstudio\build.ps1
@@ -464,7 +495,7 @@ build_x64\breadstudio\desk\test-bin\RelWithDebInfo\bread-desk-test.exe; $LASTEXI
 
 Expected: several `FAIL line …` lines (every check that expects `true`), then `1`.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Replace the body of `breadstudio/desk/LayerGraph.cpp`:
 
@@ -503,7 +534,7 @@ bool reaches(const LayerGraph &graph, const std::string &from, const std::string
 } // namespace desk
 ```
 
-- [ ] **Step 5: Run the test and see it pass**
+- [x] **Step 5: Run the test and see it pass**
 
 ```powershell
 .\breadstudio\build.ps1
@@ -512,7 +543,7 @@ build_x64\breadstudio\desk\test-bin\RelWithDebInfo\bread-desk-test.exe; $LASTEXI
 
 Expected: `LayerGraph: all checks passed`, then `0`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add -A
@@ -545,7 +576,7 @@ This task decides whether §5.3 holds. If Step 8 fails, stop and report to the o
   - `desk::BusMeters &desk::busMeters()` with `void start()`, `void stop()`, `float takePeakDb(size_t bus)` — the peak since the last call, in dBFS, negative infinity when silent.
   - In `desk.cpp`: the functions `load()` and `unload()` and the event switch that later tasks add lines to.
 
-- [ ] **Step 1: Write the read side of the input model**
+- [x] **Step 1: Write the read side of the input model**
 
 `breadstudio/desk/InputModel.hpp`:
 
@@ -628,7 +659,7 @@ bool hasAudio(obs_source_t *source)
 } // namespace desk
 ```
 
-- [ ] **Step 2: Write the audio bed**
+- [x] **Step 2: Write the audio bed**
 
 `breadstudio/desk/AudioBed.hpp`:
 
@@ -817,7 +848,7 @@ void AudioBed::sync()
 } // namespace desk
 ```
 
-- [ ] **Step 3: Write the bus meters**
+- [x] **Step 3: Write the bus meters**
 
 `breadstudio/desk/BusMeters.hpp`:
 
@@ -927,7 +958,7 @@ float BusMeters::takePeakDb(size_t bus)
 } // namespace desk
 ```
 
-- [ ] **Step 4: Write the tone generator**
+- [x] **Step 4: Write the tone generator**
 
 `breadstudio/desk/test/make-tone.ps1`:
 
@@ -967,7 +998,7 @@ $writer.Flush()
 Write-Output $Path
 ```
 
-- [ ] **Step 5: Replace the module entry, with a temporary probe**
+- [x] **Step 5: Replace the module entry, with a temporary probe**
 
 The probe is two Tools menu items that exist only until Task 7 replaces them with the real mixer.
 
@@ -1080,7 +1111,7 @@ bool obs_module_load(void)
 }
 ```
 
-- [ ] **Step 6: Add the sources to the build**
+- [x] **Step 6: Add the sources to the build**
 
 In `breadstudio/desk/CMakeLists.txt`, replace the line added in Task 2
 
@@ -1105,12 +1136,12 @@ target_sources(
 )
 ```
 
-- [ ] **Step 7: Build**
+- [x] **Step 7: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
 
-- [ ] **Step 8: Prove the audio bed**
+- [x] **Step 8: Prove the audio bed**
 
 Make the tone:
 
@@ -1142,12 +1173,12 @@ Expected: `probe: AFV of 'Tone' is now off` once, and three groups of six `probe
 - Reading C at about `-6.0 dB` means the tone was counted twice: §5.3 does not hold. **Stop and report to the owner.**
 - Reading B at `-inf dB` means the bed is not mixed: §5.3 does not hold. **Stop and report to the owner.**
 
-- [ ] **Step 9: Check that the collection unloads cleanly**
+- [x] **Step 9: Check that the collection unloads cleanly**
 
 Start the program. With `Tone` still AFV off: Scene Collection → New, give it any name; then Scene Collection → switch back to the first one; then close the program. Read the log.
 Expected: `Number of memory leaks: 0`, and no line containing `remaining`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```powershell
 git add -A
@@ -1177,7 +1208,7 @@ Record the three readings of bus M in the commit body.
   - `class desk::TileDisplay : public QWidget` with `setInputs(const std::vector<OBSSource> &)`, `setFrames(const std::vector<uint32_t> &)`, constants `TileW = 160`, `TileH = 90`, and signals `clicked(int index)`, `moved(int from, int to)`, `menuRequested(int index, const QPoint &globalPos)`.
   - `class desk::InputBar : public QWidget` with `refresh()`, `updateTally()`, `clear()`, and the private members `row` (a `QHBoxLayout *`), `footerRow`, `sources`, `display`, and `QWidget *makeFooter(int index)`, which Tasks 5 and 6 extend.
 
-- [ ] **Step 1: Add switching to the input model**
+- [x] **Step 1: Add switching to the input model**
 
 Append to `breadstudio/desk/InputModel.hpp`, inside `namespace desk`:
 
@@ -1303,7 +1334,7 @@ void clearModel()
 }
 ```
 
-- [ ] **Step 2: Write the tile display**
+- [x] **Step 2: Write the tile display**
 
 `breadstudio/desk/TileDisplay.hpp`:
 
@@ -1579,7 +1610,7 @@ void TileDisplay::mouseReleaseEvent(QMouseEvent *event)
 } // namespace desk
 ```
 
-- [ ] **Step 3: Write the input bar**
+- [x] **Step 3: Write the input bar**
 
 `breadstudio/desk/InputBar.hpp`:
 
@@ -1777,7 +1808,7 @@ void InputBar::clear()
 } // namespace desk
 ```
 
-- [ ] **Step 4: Declare `inputsChanged` in the shared header**
+- [x] **Step 4: Declare `inputsChanged` in the shared header**
 
 In `breadstudio/desk/Desk.hpp`, inside `namespace desk`, after `text()`:
 
@@ -1786,7 +1817,7 @@ In `breadstudio/desk/Desk.hpp`, inside `namespace desk`, after `text()`:
 void inputsChanged();
 ```
 
-- [ ] **Step 5: Wire the bar into the module**
+- [x] **Step 5: Wire the bar into the module**
 
 In `breadstudio/desk/desk.cpp`:
 
@@ -1882,16 +1913,16 @@ In `obs_module_load`, before `obs_frontend_add_event_callback`:
 	signal_handler_connect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
 ```
 
-- [ ] **Step 6: Add the sources to the build**
+- [x] **Step 6: Add the sources to the build**
 
 In `breadstudio/desk/CMakeLists.txt`, add to the `target_sources(bread-desk PRIVATE …)` list, keeping it alphabetical: `InputBar.cpp`, `InputBar.hpp`, `TileDisplay.cpp`, `TileDisplay.hpp`.
 
-- [ ] **Step 7: Build**
+- [x] **Step 7: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
 
-- [ ] **Step 8: Check it by hand**
+- [x] **Step 8: Check it by hand**
 
 Start the program. Docks menu → tick "Inputs"; drag the floating window to the bottom of the main window to dock it. Studio Mode on. In OBS's Scenes dock make four scenes: `One` (a Color Source, red), `Two` (a Color Source, blue), `Mixed` (a group holding a text source, plus `One` added as a scene), and `Empty` (nothing).
 
@@ -1908,12 +1939,12 @@ Start the program. Docks menu → tick "Inputs"; drag the floating window to the
 
 If the transition selection does not come back to what it was after a tile's Cut, that is a defect in `cutToProgram`/`onTransitionStopped`; fix it in this task.
 
-- [ ] **Step 9: Check that the collection unloads cleanly**
+- [x] **Step 9: Check that the collection unloads cleanly**
 
 With the bar docked and showing tiles: Scene Collection → New; switch back; close the program. Read the log.
 Expected: `Number of memory leaks: 0`, and no line containing `remaining`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```powershell
 git add -A
@@ -1942,7 +1973,7 @@ git commit -m "breadstudio: add the input bar with live tiles, tally, preview an
   - `bool desk::canReorder()` and `bool desk::moveInput(int from, int to)`.
   - In `InputBar`: `void syncAudioButtons()` (public), the Add button, the right-click menu, drag to reorder.
 
-- [ ] **Step 1: Add the write side to the input model**
+- [x] **Step 1: Add the write side to the input model**
 
 Append to `breadstudio/desk/InputModel.hpp`, after adding `#include "LayerGraph.hpp"` at the top:
 
@@ -2190,7 +2221,7 @@ bool moveInput(int from, int to)
 }
 ```
 
-- [ ] **Step 2: Add the bar's new members**
+- [x] **Step 2: Add the bar's new members**
 
 In `breadstudio/desk/InputBar.hpp`:
 
@@ -2213,7 +2244,7 @@ Add to the private section:
 	std::vector<OBSSignal> muteSignals;
 ```
 
-- [ ] **Step 3: Give each tile its audio button**
+- [x] **Step 3: Give each tile its audio button**
 
 In `breadstudio/desk/InputBar.cpp`:
 
@@ -2286,7 +2317,7 @@ void InputBar::syncAudioButtons()
 }
 ```
 
-- [ ] **Step 4: Add the Add button, the right-click menu and drag to reorder**
+- [x] **Step 4: Add the Add button, the right-click menu and drag to reorder**
 
 In `breadstudio/desk/InputBar.cpp`, at the end of the constructor:
 
@@ -2415,7 +2446,7 @@ void InputBar::deleteDialog(obs_source_t *input)
 }
 ```
 
-- [ ] **Step 5: Add the nine number hotkeys**
+- [x] **Step 5: Add the nine number hotkeys**
 
 In `breadstudio/desk/desk.cpp`:
 
@@ -2473,12 +2504,12 @@ In `obs_module_load`, before the `blog` line:
 	obs_frontend_add_save_callback(saveNumberHotkeys, nullptr);
 ```
 
-- [ ] **Step 6: Build**
+- [x] **Step 6: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
 
-- [ ] **Step 7: Check it by hand**
+- [x] **Step 7: Check it by hand**
 
 Start the program with the Inputs dock docked and Studio Mode on. Leave OBS's Scenes dock visible for this task only, to compare.
 
@@ -2498,7 +2529,7 @@ Start the program with the Inputs dock docked and Studio Mode on. Leave OBS's Sc
 | Delete tiles until one is left, then delete that one | The "last input" message. |
 | Settings → Hotkeys: bind "Input 2 to Preview" to a key; press it | Whatever is tile 2 goes to Preview. Drag another tile into place 2 and press again: the new tile 2 goes to Preview. |
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add -A
@@ -2524,7 +2555,7 @@ git commit -m "breadstudio: add, rename, delete and reorder inputs, with audio a
   - `void desk::removeLayer(obs_source_t *host, int64_t id)`, `void desk::moveLayer(obs_source_t *host, int64_t id, bool up)`, `void desk::setLayerVisible(obs_source_t *host, int64_t id, bool visible)`.
   - `class desk::InputSettings : public QDialog` with `InputSettings(obs_source_t *input, QWidget *parent)` and `obs_source_t *input() const`.
 
-- [ ] **Step 1: Add layers to the input model**
+- [x] **Step 1: Add layers to the input model**
 
 Append to `breadstudio/desk/InputModel.hpp`, after adding `#include <string>` at the top:
 
@@ -2629,7 +2660,7 @@ void moveLayer(obs_source_t *host, int64_t id, bool up)
 }
 ```
 
-- [ ] **Step 2: Write the settings window**
+- [x] **Step 2: Write the settings window**
 
 `breadstudio/desk/InputSettings.hpp`:
 
@@ -2796,7 +2827,7 @@ void InputSettings::reload()
 } // namespace desk
 ```
 
-- [ ] **Step 3: Give each tile its gear**
+- [x] **Step 3: Give each tile its gear**
 
 In `breadstudio/desk/InputBar.hpp`, add to the private section:
 
@@ -2866,16 +2897,16 @@ void InputBar::openSettings(int index)
 }
 ```
 
-- [ ] **Step 4: Add the sources to the build**
+- [x] **Step 4: Add the sources to the build**
 
 In `breadstudio/desk/CMakeLists.txt`, add to the `target_sources(bread-desk PRIVATE …)` list, keeping it alphabetical: `InputSettings.cpp`, `InputSettings.hpp`.
 
-- [ ] **Step 5: Build**
+- [x] **Step 5: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
 
-- [ ] **Step 6: Check it by hand**
+- [x] **Step 6: Check it by hand**
 
 Start the program, Inputs dock docked, Studio Mode on. Use + Add to make `Red` (Colour, red), `Blue` (Colour, blue) and `Box` (Blank). In OBS's Scenes dock also make an empty scene `Empty`.
 
@@ -2895,7 +2926,7 @@ Start the program, Inputs dock docked, Studio Mode on. Use + Add to make `Red` (
 | Look at `Empty`'s tile, then press its ⚙ | The tile is black and its ♪ is greyed out. In the window, "Base properties…" is greyed out. Nothing crashes. |
 | With `Box` on Program, close and restart the program | `Box` still has its layers where you put them. |
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add -A
@@ -2918,7 +2949,7 @@ git commit -m "breadstudio: add input settings with layers"
   - `class desk::Meter : public QWidget` with `void setDb(float db)`.
   - `class desk::Mixer : public QWidget` with `void rebuild()`, `void clear()`, `void syncMute()`.
 
-- [ ] **Step 1: Write the level bar**
+- [x] **Step 1: Write the level bar**
 
 `breadstudio/desk/Meter.hpp`:
 
@@ -3009,7 +3040,7 @@ void Meter::paintEvent(QPaintEvent *)
 } // namespace desk
 ```
 
-- [ ] **Step 2: Write the mixer**
+- [x] **Step 2: Write the mixer**
 
 `breadstudio/desk/Mixer.hpp`:
 
@@ -3360,7 +3391,7 @@ void Mixer::tick()
 } // namespace desk
 ```
 
-- [ ] **Step 3: Wire the mixer in and take the probe out**
+- [x] **Step 3: Wire the mixer in and take the probe out**
 
 In `breadstudio/desk/desk.cpp`:
 
@@ -3384,11 +3415,11 @@ static Mixer *mixer = nullptr; /* owned by its dock */
 	obs_frontend_add_dock_by_id(MixerDockId, obs_module_text("Mixer"), mixer);
 ```
 
-- [ ] **Step 4: Add the sources to the build**
+- [x] **Step 4: Add the sources to the build**
 
 In `breadstudio/desk/CMakeLists.txt`, add to the `target_sources(bread-desk PRIVATE …)` list, keeping it alphabetical: `Meter.cpp`, `Meter.hpp`, `Mixer.cpp`, `Mixer.hpp`.
 
-- [ ] **Step 5: Build**
+- [x] **Step 5: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
@@ -3396,7 +3427,7 @@ Expected: exit 0.
 Run: `Select-String -Path breadstudio\desk\*.cpp -Pattern 'probe'`
 Expected: no output.
 
-- [ ] **Step 6: Check it by hand, and repeat the audio bed readings**
+- [x] **Step 6: Check it by hand, and repeat the audio bed readings**
 
 Start the program. Docks menu → tick "Mixer" and dock it. Inputs dock docked, Studio Mode on. Settings → Audio: every Global Audio Device Disabled. Use + Add to make `Tone` (Media file, `bread-tone.wav`, Loop ticked, "Restart playback when source becomes active" unticked) and `Other` (Blank).
 
@@ -3414,12 +3445,12 @@ Start the program. Docks menu → tick "Mixer" and dock it. Inputs dock docked, 
 | + Add → Audio device, choose a microphone | A new strip. Its AFV button is **unlit**: an audio-only input starts always on. Speaking moves bus M whatever is on Program. |
 | Close and restart | AFV, sends, ♪ and fader are as you left them. |
 
-- [ ] **Step 7: Check that the collection unloads cleanly**
+- [x] **Step 7: Check that the collection unloads cleanly**
 
 With the mixer showing strips and one settings window (⚙) open: Scene Collection → New; switch back; close the program. Read the log.
 Expected: `Number of memory leaks: 0`, and no line containing `remaining`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add -A
@@ -3441,7 +3472,7 @@ git commit -m "breadstudio: add the mixer with bus sends, afv and bus levels"
 - Consumes: `desk::InputsDockId`, `desk::MixerDockId`.
 - Produces: `void desk::applyLayout()`, `void desk::applyLayoutOnFirstRun()`.
 
-- [ ] **Step 1: Write the layout**
+- [x] **Step 1: Write the layout**
 
 `breadstudio/desk/DeskLayout.hpp`:
 
@@ -3534,7 +3565,7 @@ void applyLayoutOnFirstRun()
 } // namespace desk
 ```
 
-- [ ] **Step 2: Call it**
+- [x] **Step 2: Call it**
 
 In `breadstudio/desk/desk.cpp`:
 
@@ -3569,7 +3600,7 @@ In `obs_module_load`, before the `blog` line:
 
 In `breadstudio/desk/CMakeLists.txt`, add to the `target_sources(bread-desk PRIVATE …)` list, keeping it alphabetical: `DeskLayout.cpp`, `DeskLayout.hpp`.
 
-- [ ] **Step 3: Switch scene duplication off by default**
+- [x] **Step 3: Switch scene duplication off by default**
 
 In `frontend/OBSApp.cpp`, line 358, change
 
@@ -3591,12 +3622,12 @@ In `breadstudio/UPSTREAM-EDITS.md`, under `## Edited`, add:
 
 (If S0 Task 3 has already put `frontend/OBSApp.cpp` on the list, add this reason to its line instead of a second line.)
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 Run: `.\breadstudio\build.ps1`
 Expected: exit 0.
 
-- [ ] **Step 5: Check the first run**
+- [x] **Step 5: Check the first run**
 
 Remove the build's portable settings, so this is a first run. This deletes the test scenes made in earlier tasks, which are no longer needed:
 
@@ -3616,7 +3647,7 @@ Start the program.
 
 The three `addDockWidget`/`splitDockWidget`/`resizeDocks` lines are the part to adjust by eye if the picture differs from spec §4. Hiding the three OBS docks, switching Studio Mode on, and the first-run flag are not to be changed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add -A
@@ -3637,7 +3668,7 @@ Expected from the check: `UPSTREAM-EDITS.md matches the 3 file(s) changed since 
 - Consumes: the finished desk.
 - Produces: the checklist that is run after every upstream merge.
 
-- [ ] **Step 1: Write the checklist**
+- [x] **Step 1: Write the checklist**
 
 `breadstudio/docs/DESK-SMOKE.md`:
 
@@ -3704,7 +3735,7 @@ Start from a first run (no settings folder).
    its ♪ is greyed out, and its ⚙ window has "Base properties…" greyed out.
 ````
 
-- [ ] **Step 2: Run the automated test once more**
+- [x] **Step 2: Run the automated test once more**
 
 ```powershell
 .\breadstudio\build.ps1
@@ -3713,7 +3744,7 @@ build_x64\breadstudio\desk\test-bin\RelWithDebInfo\bread-desk-test.exe; $LASTEXI
 
 Expected: `LayerGraph: all checks passed`, then `0`.
 
-- [ ] **Step 3: Commit the checklist**
+- [x] **Step 3: Commit the checklist**
 
 ```powershell
 git add -A
@@ -3727,7 +3758,7 @@ Sections A to D need two cameras, a microphone and a second monitor, so the owne
 
 Any item that fails is fixed in the task that owns the code, then the item is run again.
 
-- [ ] **Step 5: Record the result**
+- [x] **Step 5: Record the result**
 
 Add a dated line at the end of `breadstudio/docs/DESK-SMOKE.md` for each run: the date, the build (commit), installed or build folder, and the items that failed, or "all passed". Commit it with the message `breadstudio: record the desk smoke run`.
 

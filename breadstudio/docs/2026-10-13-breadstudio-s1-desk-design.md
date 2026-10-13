@@ -110,9 +110,10 @@ shape.
 │ │1 Cam1│ │2 Cam2│ │3 Deck│ │4 2box│              │
 │ │Cut ♪⚙│ │Cut ♪⚙│ │Cut ♪⚙│ │Cut ♪⚙│              │
 │ └──────┘ └──────┘ └──────┘ └──────┘              │
-├──────────────────────────────────┬───────────────┤
-│ Mixer (new dock, §5)             │ OBS Controls  │
-└──────────────────────────────────┴───────────────┘
+├───────────────────────┬─────────────┬────────────┤
+│ Mixer (new dock, §5)  │ OBS Scene   │ OBS        │
+│                       │ Transitions │ Controls   │
+└───────────────────────┴─────────────┴────────────┘
 ```
 
 ### 4.1 Top half
@@ -228,10 +229,9 @@ drops it from the scenes that hold it, and mixes it once
 (`libobs/obs-audio.c`, `push_audio_tree2`; `libobs/obs-scene.c`,
 `scene_audio_render`). The level is therefore the same on either path or both.
 
-This was read in the source and has not been run. The plan's first audio task
-proves it with a test tone (§1.1 item 4) before any mixer interface is built.
-If it fails, the fallback is a libobs edit and the owner decides before work
-continues.
+This was read in the source, then proven with a test tone (§1.1 item 4): bus
+M reads -12.0 dB with the tone on Program alone, in the bed alone, and on
+both paths at once.
 
 OBS clears every output channel when a scene collection is unloaded, so the
 desk puts the bed back after each load.
@@ -272,7 +272,7 @@ the main window:
 | Need | Looked up | Used for |
 |---|---|---|
 | Reordering inputs | The scene list, `scenes` | Moving a row, then raising its `scenesReordered` signal so the multiview follows. |
-| The desk layout | The docks `scenesDock`, `sourcesDock`, `mixerDock` | Hiding them and placing the desk's docks. |
+| The desk layout | The docks `scenesDock`, `sourcesDock`, `mixerDock`, `transitionsDock`, `controlsDock` | Hiding the first three and placing the last two beside the desk's docks. |
 
 An upstream rename would break these without a build error. So: if a lookup
 fails, that feature is switched off (drag is disabled, the layout is left as
