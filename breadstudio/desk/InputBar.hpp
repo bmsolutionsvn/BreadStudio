@@ -45,7 +45,6 @@ private:
 	QWidget *makeFooter(int index);
 	void openSettings(int index);
 
-	void addInput(const char *textKey, const char *typeId, bool blank);
 	void showMenu(int index, const QPoint &globalPos);
 	void renameDialog(obs_source_t *input);
 	void deleteDialog(obs_source_t *input);

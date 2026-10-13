@@ -5,9 +5,13 @@ find_package(Qt6 REQUIRED Widgets)
 add_library(bread-desk MODULE)
 add_library(OBS::bread-desk ALIAS bread-desk)
 
+if(NOT TARGET OBS::properties-view)
+  add_subdirectory("${CMAKE_SOURCE_DIR}/shared/properties-view" "${CMAKE_BINARY_DIR}/shared/properties-view")
+endif()
+
 target_sources(bread-desk PRIVATE Desk.hpp desk.cpp)
 
-target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs Qt::Widgets)
+target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets)
 
 if(OS_WINDOWS)
   configure_file(cmake/windows/obs-module.rc.in bread-desk.rc)
@@ -36,6 +40,9 @@ target_sources(
     InputBar.hpp
     InputModel.cpp
     InputModel.hpp
+    InputPage.hpp
+    InputSelect.cpp
+    InputSelect.hpp
     InputSettings.cpp
     InputSettings.hpp
     LayerGraph.cpp
@@ -44,6 +51,8 @@ target_sources(
     Meter.hpp
     Mixer.cpp
     Mixer.hpp
+    PropertiesPage.cpp
+    PropertiesPage.hpp
     StreamAddress.cpp
     StreamAddress.hpp
     TileDisplay.cpp

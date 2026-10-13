@@ -1,6 +1,7 @@
 #include "InputBar.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "InputSelect.hpp"
 #include "InputSettings.hpp"
 #include "TileDisplay.hpp"
 
@@ -81,41 +82,24 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	rows->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 	scroll->setWidget(holder);
 
-	/* Add Input: one entry per base type that exists on this machine (spec §3) */
-	struct InputType {
-		const char *textKey;
-		const char *id;
-		bool blank;
-	};
-	static const InputType types[] = {
-		{"Type.Camera", "dshow_input", false},     {"Type.Media", "ffmpeg_source", false},
-		{"Type.Screen", "monitor_capture", false}, {"Type.Window", "window_capture", false},
-		{"Type.Browser", "browser_source", false}, {"Type.Image", "image_source", false},
-		{"Type.Colour", "color_source", false},    {"Type.Blank", "color_source", true},
-		{"Type.Audio", "wasapi_input_capture", false},
-	};
-
 	/* the footer, as vMix's: Add Input on the left, then Record and Stream */
 	auto *footer = new QHBoxLayout();
 	footer->setSpacing(6);
 	outer->addLayout(footer);
 
-	/* filled when it opens: this dock is made while OBS is still loading modules, before
-	 * the plugins that own these types have registered them */
+	/* Add Input opens the Input Select window (network inputs spec §3). It blocks the
+	 * main window, as vMix's does, but is not run with exec(): clear() must be able to
+	 * delete it when the scene collection goes. */
 	auto *add = new QPushButton(text("Add"), this);
-	auto *addMenu = new QMenu(add);
-	connect(addMenu, &QMenu::aboutToShow, this, [this, addMenu] {
-		addMenu->clear();
-		for (const InputType &type : types) {
-			if (!obs_get_latest_input_type_id(type.id)) {
-				continue;
-			}
-			QAction *action = addMenu->addAction(text(type.textKey));
-			connect(action, &QAction::triggered, this,
-				[this, type] { addInput(type.textKey, type.id, type.blank); });
-		}
+	connect(add, &QPushButton::clicked, this, [this] {
+		auto *window = new InputSelect(settingsParent());
+		window->setAttribute(Qt::WA_DeleteOnClose);
+		connect(window, &InputSelect::inputMade, this, [](obs_source_t *input) {
+			inputsChanged();
+			toPreview(input);
+		});
+		window->open();
 	});
-	add->setMenu(addMenu);
 	footer->addWidget(add);
 
 	record = new QPushButton(text("Record"), this);
@@ -150,8 +134,7 @@ void InputBar::updateOutputs()
 int InputBar::tilesPerRow() const
 {
 	const QMargins margins = layout()->contentsMargins();
-	const int room = width() - margins.left() - margins.right() -
-			 style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+	const int room = width() - margins.left() - margins.right() - style()->pixelMetric(QStyle::PM_ScrollBarExtent);
 	return std::max(1, room / TileDisplay::TileW);
 }
 
@@ -370,6 +353,7 @@ void InputBar::updateTally()
 
 void InputBar::clear()
 {
+	qDeleteAll(settingsParent()->findChildren<InputSelect *>());
 	qDeleteAll(settingsParent()->findChildren<InputSettings *>());
 	sources.clear();
 	clearTiles();
@@ -385,28 +369,6 @@ void InputBar::syncAudioButtons()
 	}
 }
 
-void InputBar::addInput(const char *textKey, const char *typeId, bool blank)
-{
-	OBSDataAutoRelease settings = obs_data_create();
-	if (blank) {
-		obs_data_set_int(settings, "color", 0xFF000000);
-	}
-
-	OBSSource input = createInput(typeId, obs_module_text(textKey), settings);
-	if (!input) {
-		return;
-	}
-
-	inputsChanged();
-	toPreview(input);
-
-	/* a Blank needs no setting up; everything else opens OBS's own properties window */
-	OBSSource base = baseSource(input);
-	if (!blank && base) {
-		obs_frontend_open_source_properties(base);
-	}
-}
-
 void InputBar::showMenu(int index, const QPoint &globalPos)
 {
 	if ((size_t)index >= sources.size()) {
@@ -414,7 +376,7 @@ void InputBar::showMenu(int index, const QPoint &globalPos)
 	}
 	OBSSource input = sources[(size_t)index];
 
-	QMenu menu(this);
+	QMenu menu(window()); /* a top-level parent: the dock's content is not one, and Qt says so in the log */
 	QAction *rename = menu.addAction(text("Rename"));
 	QAction *remove = menu.addAction(text("Delete"));
 
