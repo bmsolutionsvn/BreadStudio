@@ -301,7 +301,7 @@ void InputBar::showMenu(int index, const QPoint &globalPos)
 	}
 	OBSSource input = sources[(size_t)index];
 
-	QMenu menu(this);
+	QMenu menu(window());
 	QAction *rename = menu.addAction(text("Rename"));
 	QAction *remove = menu.addAction(text("Delete"));
 
