@@ -101,7 +101,8 @@ plugin is not in the build is left out, as the Add menu leaves a type out now.
 | NDI / OMT / Desktop Capture | NDI source, OMT source, or Display or Window Capture | §4 |
 | Stream / SRT | Media Source, network | §5 |
 | Image | Image | OBS's settings, embedded |
-| Colour | Colour Source, with a "Blank" choice that makes it black | OBS's settings, embedded |
+| Colour | Colour Source | OBS's settings, embedded |
+| Blank | A black Colour Source, to put layers on | Nothing to set |
 | Audio Input | Audio Input Capture | OBS's settings, embedded |
 | Web Browser | Browser | OBS's settings, embedded |
 
@@ -225,32 +226,39 @@ As vMix's, field for field:
 Every type plays through OBS's Media Source. The page turns the form into
 that source's address and options:
 
-| Stream Type | Address | Options |
+| Stream Type | Address | FFmpeg options |
 |---|---|---|
-| SRT (Caller) | `srt://host:port?mode=caller&latency=…&passphrase=…&pbkeylen=…&streamid=…` | |
-| SRT (Listener) | `srt://host:port?mode=listener&…` | host empty: `0.0.0.0` |
-| SRT (Rendezvous) | `srt://host:port?mode=rendezvous&…` | |
+| SRT (Caller) | `srt://host:port` | `mode=caller latency=… passphrase='…' pbkeylen=… streamid='…'` |
+| SRT (Listener) | `srt://host:port`; host empty: `0.0.0.0` | `mode=listener …` |
+| SRT (Rendezvous) | `srt://host:port` | `mode=rendezvous …` |
 | RTSP over UDP | the URL as typed | `rtsp_transport=udp` |
 | RTSP over TCP | the URL as typed | `rtsp_transport=tcp` |
-| Transport Stream over UDP | `udp://host:port` | format `mpegts` |
-| Transport Stream over TCP | `tcp://host:port?listen` | format `mpegts` |
+| Transport Stream over UDP | `udp://host:port`; host empty: `udp://@:port` | format `mpegts` |
+| Transport Stream over TCP | `tcp://host:port`; host empty: `0.0.0.0` | `listen=1`, format `mpegts` |
 | Transport Stream over TCP Pull | `tcp://host:port` | format `mpegts` |
 
+- The address carries the host and the port and nothing else. Every other
+  value goes in the Media Source's FFmpeg options, in quotes, because
+  FFmpeg does not decode every parameter of an SRT address: a passphrase
+  with `&` in it would be cut short there. Quoted, a space, `&` or `=` in a
+  passphrase or stream ID cannot change another option.
 - Latency is typed in milliseconds and written in the unit the library wants.
-- A parameter whose field is empty is left out of the address.
-- Passphrase and stream ID are escaped, so a `&` or a space in one cannot
-  change the address.
+- An option whose field is empty is left out.
+- A host is a name or an address. One that holds a `/`, `?`, `@` or a space
+  greys OK out, as does an SRT passphrase outside SRT's 10 to 79 characters.
 - The source is set to reconnect after two seconds and to keep running while
   it is not on Program, so a cut to it has no start-up delay.
 
-Turning the form into an address, and an address back into the form, is one
-plain function with no OBS and no Qt in it (§11).
+Turning the form into an address and options is one plain function with no
+OBS and no Qt in it (§11). The form's values are saved beside the source
+(§9), so nothing has to be read back out of an address.
 
 ### 5.3 Status, and the ceiling
 
 The status box lists this input's connection state as it changes, with the
-time: connecting, playing, lost, reconnecting, and the error text when the
-source reports one.
+time: connecting, playing, lost and trying again. It is shown when the page is
+opened for an input that exists. OBS's Media Source reports a state and no
+reason; FFmpeg's reason is in OBS's log.
 
 This is OBS's general media player. It reconnects by itself, but it has no SRT
 statistics (packet loss, round-trip time, bitrate). A dedicated SRT receiver
@@ -398,7 +406,7 @@ open in the new window from "Base properties…".
 | A sender is absent at startup, or disappears | The tile goes black. The input keeps trying and comes back by itself. Nothing else on the desk changes. |
 | A sender returns under its name in another format | The input follows it. |
 | Two senders have the same source name | They are two tiles, under two PC names. An input stays bound to the PC and name it was made from. |
-| SRT: the listener port is in use, or the passphrase is wrong | The status box says which. The input retries. |
+| SRT: the listener port is in use, or the passphrase is wrong | The tile stays black and the status box shows the input trying again. The reason is in OBS's log. |
 | NDI's DLL is missing or does not load | The NDI tab shows one line saying so. NDI inputs already in the collection are black tiles. Nothing crashes; every other kind works. |
 | No GPU decoder for OMT-HX | Software decoding, and the page says so. |
 | An OMT source's format is unknown | `unknown format` on the tile. It can be added, and stays black. |
@@ -410,8 +418,8 @@ open in the new window from "Base properties…".
 Automated, on every build:
 
 - **The stream address function**: every stream type; with and without
-  passphrase and stream ID; characters that need escaping; and the round trip
-  from address back to form.
+  passphrase and stream ID; a quote, a space, `&` and `=` in a value; an IPv6
+  host; and every reason OK is greyed out.
 - **The on-air rule**: a small scene tree with the source alone, as a layer,
   hidden, and absent.
 - In the OMT-HX repo: **`probe()`** against the test sender in all three
