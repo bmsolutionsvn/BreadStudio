@@ -51,8 +51,12 @@ target_sources(
     Meter.hpp
     Mixer.cpp
     Mixer.hpp
+    OmtTab.cpp
+    OmtTab.hpp
     PropertiesPage.cpp
     PropertiesPage.hpp
+    SourceList.cpp
+    SourceList.hpp
     StreamAddress.cpp
     StreamAddress.hpp
     StreamPage.cpp
@@ -74,5 +78,13 @@ add_executable(bread-stream-test test/StreamAddressTest.cpp StreamAddress.cpp)
 target_include_directories(bread-stream-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(
   bread-stream-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
+
+# Grouping announced sources by PC: no OBS, no Qt.
+add_executable(bread-sources-test test/SourceListTest.cpp SourceList.cpp)
+target_include_directories(bread-sources-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+  bread-sources-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )

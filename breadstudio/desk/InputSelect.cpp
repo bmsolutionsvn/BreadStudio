@@ -2,6 +2,7 @@
 #include "Desk.hpp"
 #include "InputModel.hpp"
 #include "InputPage.hpp"
+#include "OmtTab.hpp"
 #include "PropertiesPage.hpp"
 #include "StreamPage.hpp"
 
@@ -13,8 +14,10 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QStackedWidget>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
+#include <cstring>
 #include <iterator>
 
 namespace desk {
@@ -69,6 +72,40 @@ private:
 	QStackedWidget *stack;
 };
 
+/* The OMT / Desktop Capture row: one tab per kind, as vMix groups them (spec §4). A tab whose plugin
+ * is not in the build is left out. Plan C puts NDI in front. */
+class CapturePage : public InputPage {
+public:
+	explicit CapturePage(QWidget *parent) : InputPage(parent)
+	{
+		auto *layout = new QVBoxLayout(this);
+		layout->setContentsMargins(0, 0, 0, 0);
+		tabs = new QTabWidget(this);
+		layout->addWidget(tabs);
+
+		if (obs_get_latest_input_type_id(OmtTab::TypeId)) {
+			addTab(new OmtTab(tabs), "Tab.Omt");
+		}
+		addTab(new DesktopPage(tabs), "Tab.Desktop");
+
+		connect(tabs, &QTabWidget::currentChanged, this, &InputPage::readyChanged);
+	}
+
+	bool ready() const override { return current()->ready(); }
+	OBSSource create() override { return current()->create(); }
+
+private:
+	void addTab(InputPage *page, const char *key)
+	{
+		tabs->addTab(page, text(key));
+		connect(page, &InputPage::readyChanged, this, &InputPage::readyChanged);
+	}
+
+	InputPage *current() const { return static_cast<InputPage *>(tabs->currentWidget()); }
+
+	QTabWidget *tabs;
+};
+
 /* One row of the list. `typeId` is the OBS source type the row needs: without it the row
  * is left out. */
 struct Kind {
@@ -88,7 +125,7 @@ const Kind kinds[] = {
 	 }},
 	{"Kind.Desktop", "monitor_capture",
 	 [](QWidget *parent) -> InputPage * {
-		 return new DesktopPage(parent);
+		 return new CapturePage(parent);
 	 }},
 	{"Kind.Stream", "ffmpeg_source",
 	 [](QWidget *parent) -> InputPage * {
@@ -160,8 +197,14 @@ InputSelect::InputSelect(obs_source_t *input, QWidget *parent) : QDialog(parent)
 	outer->addWidget(pages, 1);
 
 	OBSSource base = baseSource(existing);
-	InputPage *only = StreamPage::isStream(base) ? static_cast<InputPage *>(new StreamPage(base.Get(), pages))
-						     : static_cast<InputPage *>(new PropertiesPage(base.Get(), pages));
+	InputPage *only = nullptr;
+	if (StreamPage::isStream(base)) {
+		only = new StreamPage(base.Get(), pages);
+	} else if (base && std::strcmp(obs_source_get_unversioned_id(base), OmtTab::TypeId) == 0) {
+		only = new OmtTab(base.Get(), pages);
+	} else {
+		only = new PropertiesPage(base.Get(), pages);
+	}
 	pages->addWidget(only);
 	connect(only, &InputPage::readyChanged, this, &InputSelect::syncOk);
 
