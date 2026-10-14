@@ -10,7 +10,7 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 ## Edited
 
 - `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
-- `plugins/CMakeLists.txt` - three lines that add breadstudio/desk, breadstudio/omt-hx and breadstudio/ndi to the build
+- `plugins/CMakeLists.txt` - four lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi and breadstudio/srt to the build
 - `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is
 
 ## Replaced
