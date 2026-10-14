@@ -153,7 +153,7 @@ NDI tab checkboxes:
 |---|---|
 | Low Bandwidth Mode | Asks the sender for its low-bandwidth stream |
 | Audio Only | Receives the sound and no picture |
-| Increase Buffer Size | Trades delay for smoothness on a poor network |
+| Increase Buffer Size | Trades delay for smoothness on a poor network: unticked, each frame is shown as it arrives; ticked, OBS buffers the source |
 
 The OMT tab has no checkboxes: the receiver has no settings.
 
@@ -281,9 +281,15 @@ settings, as OBS's own settings panel does, and reads two lists from them:
 
 | List | Each entry |
 |---|---|
-| `address` | Shown name; value: the address to connect to |
+| `address` (OMT), `ndi_source_name` (NDI, DistroAV's key) | Shown name; value: the address to connect to |
 | `detail` (OMT only) | Value: the address it describes; shown text: the tile's format line (§4.2) |
 | `receiving` (OMT, an existing input only) | An info line whose text is what the input receives now (§4.3) |
+| `status` (NDI, only while NDI is off) | An info line whose text is why (§10) |
+
+"Also search" is not a source's setting: NDI's finder is shared. The NDI
+plugin offers two procedures on OBS's global proc handler,
+`bread_ndi_get_extra_ips` and `bread_ndi_set_extra_ips`, and keeps the list in
+its own config file.
 
 The window reads them again once a second while a tab is open. A build
 without a plugin has no such type, and so no tab.
@@ -320,8 +326,11 @@ DistroAV (the former obs-ndi) is an OBS plugin under the GPL. BreadStudio
 takes its input and the code that finds and loads NDI's library into
 `breadstudio/ndi`:
 
-- Each file keeps its copyright header, and the About box credits DistroAV.
-- The source is named "NDI source". DistroAV's Tools menu entry, output
+- Each file keeps its copyright header, and the NDI tab credits DistroAV.
+- The source is named "NDI source". Its id, `ndi_source`, and its settings
+  keys (`ndi_source_name`, `ndi_bw_mode`, `latency`) are DistroAV's, so a
+  scene collection made in OBS with DistroAV opens with its NDI inputs.
+- DistroAV's Tools menu entry, output
   settings window, update checker and its own configuration file are not
   taken.
 - Its output code is not taken in this part; part 2 will need it.
@@ -329,12 +338,15 @@ takes its input and the code that finds and loads NDI's library into
 - DistroAV's later fixes are merged in by hand. The files are few and change
   rarely.
 
-The plan's first step confirms DistroAV's exact licence text and the release
-the code is taken from.
+The code is taken from DistroAV 6.2.2 (commit `9b1635f`), under "GPL
+version 2, or (at your option) any later version", the same terms as OBS.
+Its loader is rewritten on Win32 calls, so the plugin needs no Qt.
 
 ### 7.2 The DLL
 
-By N6, `Processing.NDI.Lib.x64.dll` ships in BreadStudio's folder.
+By N6, `Processing.NDI.Lib.x64.dll` ships in BreadStudio's folder, beside
+`obs64.exe`. Not beside the plugin: OBS loads every DLL in `obs-plugins` as a
+plugin.
 
 - It is copied from the NDI SDK on the build machine at build time. It is
   never committed to git.
@@ -342,12 +354,13 @@ By N6, `Processing.NDI.Lib.x64.dll` ships in BreadStudio's folder.
   BreadCamera's build already expects. Without it the configure prints a
   warning, the NDI plugin is still built (NDI's headers are MIT-licensed and
   are in the tree), and the DLL is absent, which §10 covers. The script that
-  makes the installer refuses a build that has no DLL.
+  makes the installer, when S0 writes it, refuses a build that has no DLL.
 - The plugin loads the DLL at run time, looking in its own folder first and
   then in NDI's install location. So the DLL can be taken out of the package
   later without a code change.
-- The package carries NDI's licence text, and About carries NDI's trademark
-  line.
+- The package carries NDI's licence text. The NDI tab carries NDI's
+  trademark line and a link to ndi.video, as NDI's licence asks near where NDI
+  is chosen. OBS's About box is OBS's file and is not edited.
 
 ### 7.3 The licence risk, as put to the owner
 
