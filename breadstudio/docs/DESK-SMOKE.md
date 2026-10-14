@@ -113,6 +113,35 @@ sender, `..\OMT-HX\build\release\omthx-send.exe`; then BreadCamera and vMix
 7. After closing with one OMT input of each format in the collection, the
    log has `Number of memory leaks: 0`.
 
+## G. NDI inputs and tally
+
+Spec: `2026-10-14-breadstudio-network-inputs-design.md`. Needs
+`bread-ndi-send.exe` (built beside the program, in
+`build_x64\breadstudio\ndi\test-bin`), NDI Tools on this PC, and vMix or NDI
+Tools on a second PC.
+
+1. On an installed build, on a PC that never had NDI installed: the NDI tab
+   lists a sender on another PC within five seconds, and an input made from
+   it plays with sound. Nothing was installed but BreadStudio.
+2. Low Bandwidth Mode gives a picture; Audio Only gives sound and a black
+   tile; Increase Buffer Size changes nothing visible and does not blink the
+   picture.
+3. A sender stopped for ten seconds and restarted comes back by itself.
+4. Tally, read in `bread-ndi-send`'s output or on vMix's input: only a tile in
+   the bar reads nothing; on Preview `PVW`; on Program, alone or as a layer,
+   `PGM`; a layer unticked drops `PGM`; AFV unlit with something else on
+   Program reads nothing; a three-second fade holds `PGM` to its end; with
+   Studio Mode off a click reads `PGM`.
+5. A sender with alpha (vMix with an alpha output, or NDI Test Patterns) over
+   a bright layer: clean edges.
+6. Also search with a sender PC's address on a network where announcements do
+   not arrive: its sources appear.
+7. With the DLL renamed away and no NDI runtime: the program starts, the NDI
+   tab says why NDI is off, NDI inputs are black tiles, every other kind
+   works.
+8. After closing with an NDI input in the collection, the log has
+   `Number of memory leaks: 0`.
+
 ## Before a run
 
 - The build folder must hold no copies of plugin files. OBS loads every DLL in
