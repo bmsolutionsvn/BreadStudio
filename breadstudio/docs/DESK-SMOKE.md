@@ -167,6 +167,13 @@ Tasks 4 to 6.
 7. `bread-outputs-test` and `bread-stream-test` pass.
 8. After closing with every output and a destination running, the log has
    `Number of memory leaks: 0` and no line containing `remaining`.
+9. Output 2 set to MultiView, at 1280×720: its receiver shows Preview and
+   Program across the top and the inputs below, each with its number, name
+   and a frame that matches the input bar's — red on Program, green on
+   Preview, idle otherwise; with Studio Mode off the Preview box shows
+   Program and nothing is green. Changing Program, Preview or the input list
+   is reflected within a second; changing the size restarts only its own
+   receivers.
 
 ## Before a run
 
