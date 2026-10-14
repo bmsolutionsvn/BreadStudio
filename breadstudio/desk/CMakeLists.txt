@@ -55,6 +55,8 @@ target_sources(
     PropertiesPage.hpp
     StreamAddress.cpp
     StreamAddress.hpp
+    StreamPage.cpp
+    StreamPage.hpp
     TileDisplay.cpp
     TileDisplay.hpp
 )

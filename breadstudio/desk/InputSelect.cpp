@@ -3,6 +3,7 @@
 #include "InputModel.hpp"
 #include "InputPage.hpp"
 #include "PropertiesPage.hpp"
+#include "StreamPage.hpp"
 
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -88,6 +89,10 @@ const Kind kinds[] = {
 	{"Kind.Desktop", "monitor_capture",
 	 [](QWidget *parent) -> InputPage * {
 		 return new DesktopPage(parent);
+	 }},
+	{"Kind.Stream", "ffmpeg_source",
+	 [](QWidget *parent) -> InputPage * {
+		 return new StreamPage(parent);
 	 }},
 	{"Kind.Image", "image_source",
 	 [](QWidget *parent) -> InputPage * {
