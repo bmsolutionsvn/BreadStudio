@@ -22,6 +22,10 @@ target_sources(
   omt-hx
   PRIVATE
     omt-hx.cpp
+    Catalog.cpp
+    Catalog.hpp
+    Describe.cpp
+    Describe.hpp
     "${OMTHX_ROOT}/src/pure.cpp"
     "${OMTHX_ROOT}/src/encoder.cpp"
     "${OMTHX_ROOT}/src/decoder.cpp"
@@ -56,3 +60,15 @@ add_custom_command(
 )
 
 set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
+
+# The tile and "receiving now" lines: no OBS. Includes omthx.h, so C++20.
+add_executable(bread-omt-test test/DescribeTest.cpp Describe.cpp)
+target_include_directories(bread-omt-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${OMTHX_ROOT}/include")
+set_target_properties(
+  bread-omt-test
+  PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/omt-hx/test-bin"
+    FOLDER plugins/omt-hx
+)

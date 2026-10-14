@@ -13,6 +13,9 @@
 
 #include "omthx/omthx.h"
 
+#include "Catalog.hpp"
+#include "Describe.hpp"
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("omt-hx", "en-US")
 
@@ -157,14 +160,39 @@ void omt_defaults(obs_data_t *settings)
 	obs_data_set_default_string(settings, "address", "");
 }
 
-/* data is null when OBS asks for the type's settings without a source */
-obs_properties_t *omt_properties(void *)
+/* what this input receives now (spec §4.3) */
+std::string receiving(omt_source *s)
+{
+	std::lock_guard lock(s->rxMutex);
+	if (!s->rx) {
+		return obs_module_text("Receiving.None");
+	}
+	const omthx::ReceiverStats stats = s->rx->stats();
+	if (stats.framesReceived == 0) {
+		return obs_module_text("Receiving.None");
+	}
+	return omt::receivingLine(stats, obs_module_text("Decode.Gpu"), obs_module_text("Decode.Software"));
+}
+
+/* The desk reads `address` and `detail` from the type's settings, and `receiving` from an input's
+ * (spec §6.1). data is null when OBS asks for the type's settings without a source. */
+obs_properties_t *omt_properties(void *data)
 {
 	obs_properties_t *props = obs_properties_create();
+
 	obs_property_t *address = obs_properties_add_list(props, "address", obs_module_text("Source"),
 							  OBS_COMBO_TYPE_EDITABLE, OBS_COMBO_FORMAT_STRING);
-	for (const std::string &seen : omthx::discover()) {
-		obs_property_list_add_string(address, seen.c_str(), seen.c_str());
+	obs_property_t *detail =
+		obs_properties_add_list(props, "detail", "", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	obs_property_set_visible(detail, false);
+	for (const omt::Seen &seen : omt::seen()) {
+		obs_property_list_add_string(address, seen.address.c_str(), seen.address.c_str());
+		obs_property_list_add_string(detail, seen.detail.c_str(), seen.address.c_str());
+	}
+
+	if (data) {
+		obs_properties_add_text(props, "receiving", receiving(static_cast<omt_source *>(data)).c_str(),
+					OBS_TEXT_INFO);
 	}
 	return props;
 }
@@ -195,5 +223,6 @@ bool obs_module_load(void)
 /* after every source is gone */
 void obs_module_unload(void)
 {
+	omt::stopCatalog();
 	omt_shutdown();
 }
