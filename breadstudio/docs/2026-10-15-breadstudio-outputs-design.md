@@ -62,6 +62,9 @@ On the production PC, with a second PC running vMix 29 or NDI Tools:
 | O5 | Encoding | One video and one audio encoder per output, made only while that output's SRT or one of its RTMP destinations is running, shared by all of them. One bitrate per output. |
 | O6 | The engine | One OBS canvas per output for outputs 2 to 4; Output 1 is OBS's main mix. Owner approved, from three approaches (§11). |
 | O7 | How the desk reaches the senders | Each protocol plugin registers an OBS output type; the desk makes outputs by type name and links no protocol library, as it does for inputs. |
+| O7a | Program on outputs 2 to 4 | The Program picture itself, scaled: one picture, drawn once, as vMix's outputs set to "Output" are. Owner's question. |
+| O7b | SRT output | BreadStudio's own output on FFmpeg's `srt` protocol, the one the SRT inputs use, with its settings passed apart from the address. Owner's instruction. |
+| O7c | An output that loses its picture | Keeps sending, black, with its bus's sound. No sender stops because of what is or is not on it. Owner's instruction. |
 | O8 | MultiView | vMix's default layout, one layout, nothing to set. Owner's choice. |
 | O9 | Mix | A kind of input, as in vMix 28 and later. Owner's choice. |
 | O10 | A Mix's sound | None of its own. Inputs' sound stays in the main mixer, and Audio Follows Video follows the main Program. |
@@ -128,6 +131,9 @@ The same fields as the Stream / SRT input page (network inputs spec §5.1):
 mode, host, port, latency, passphrase, key length, stream ID. A caller calls
 the host; a listener waits on the port, for one receiver at a time.
 
+The values reach FFmpeg as separate options, never inside the address, so a
+passphrase or stream ID may hold any character SRT allows (§4.3).
+
 ## 4. The engine
 
 ### 4.1 Canvases
@@ -142,12 +148,21 @@ rate.
 
 | Source | Channel 0 |
 |---|---|
-| Program | The source that feeds Program (the main transition) |
+| Program | The Program picture source, `bread_program`: it draws the main mix's finished picture |
 | Preview | The current Preview scene, followed as it changes |
 | MultiView | The MultiView source (§5) |
 | An input | That input's scene |
+| None (its input was deleted) | Nothing: the canvas is black, and its senders keep running |
 
 - A canvas with alpha is BGRA; one without is NV12, as the main mix.
+- **Program is one picture.** OBS draws its mixes in the order they were
+  made, and the main mix always first, so in every frame the main mix's
+  picture is finished before any output's canvas is drawn. `bread_program`
+  draws that picture (`obs_render_main_texture`), scaled to the output's
+  size. An output set to Program shows the same frame as Program, during a
+  fade too, and the transition is drawn once, by the main mix. This is how
+  vMix treats an output set to "Output": one Program picture, sent at
+  several sizes.
 
 ### 4.2 Changing size or alpha
 
@@ -162,7 +177,7 @@ fraction of a second; nothing else does.
 |---|---|---|---|
 | NDI | `bread_ndi_output` | The NDI plugin, from DistroAV 6.2.2's `ndi-output.cpp`, cut down as its input was | Raw frames from the output's canvas, raw audio from its bus |
 | OMT | `bread_omt_output` | The OMT plugin, on omthx's `Sender` | The same |
-| SRT | OBS's `ffmpeg_mpegts_muxer` | OBS | The output's encoders |
+| SRT | `bread_srt_output` | A new small plugin, `breadstudio/srt` (§4.4) | The output's encoders |
 | RTMP | OBS's `rtmp_output` | OBS | The output's encoders |
 
 - The desk makes each by its type name. A build without a protocol plugin
@@ -173,7 +188,31 @@ fraction of a second; nothing else does.
   NVENC, Intel QSV), else x264; the audio encoder is AAC at 160 kbit/s from
   the output's bus. Keyframes every two seconds.
 
-### 4.4 What the engine does not change
+### 4.4 SRT on FFmpeg's own protocol
+
+OBS's built-in SRT output (`ffmpeg_mpegts_muxer` with OBS's "native SRT")
+carries its own copy of FFmpeg's SRT code and reads every SRT setting from the
+address, where a passphrase with `&` in it is cut short. BreadStudio does not
+use it.
+
+`bread_srt_output` instead:
+
+- takes the output's encoded video and audio from OBS's encoders, as OBS's
+  outputs do, so it shares them with the RTMP destinations;
+- muxes them to MPEG-TS with OBS's FFmpeg (libavformat);
+- opens `srt://host:port` through FFmpeg's own `srt` protocol, the one the
+  Stream / SRT inputs play through, passing mode, latency, passphrase, key
+  length and stream ID as an options dictionary, never in the address;
+- opens and writes on its own thread, so a listener waiting for a caller, or
+  a caller that cannot connect, never holds up the program; stopping it
+  interrupts that wait at once;
+- as a caller, tries again every two seconds after a failure or a dropped
+  connection; as a listener, goes back to waiting when its receiver leaves.
+
+It links OBS's own FFmpeg (`FFmpeg::avformat`, `FFmpeg::avcodec`,
+`FFmpeg::avutil`), as the OMT plugin does, so the process has one FFmpeg.
+
+### 4.5 What the engine does not change
 
 - Recording stays OBS's: the Record button records Program.
 - Tally stays the on-air rule's (network inputs spec §8), extended for Mixes
@@ -212,12 +251,14 @@ and so on, whose base is a Mix source, `bread_mix`. The input is a tile on the
 desk like any other: it can be put on Preview and Program, used as a layer,
 and sent alone on an output.
 
-Behind the source is an OBS canvas at the main mix's size, with its own
-transition on channel 0. What that transition shows is the Mix's Program. The
-Mix's Preview is the input that will go to its Program next.
+The Mix source holds its own private transition, of any type OBS has. What
+that transition shows is the Mix's Program; the Mix's Preview is the input
+that will go to its Program next. The source draws the transition where it is
+shown, as a scene draws its items, so a Mix on Program shows the same frame
+as everything else on Program.
 
-The Mix source draws the canvas's finished frame. So the inputs on a Mix's
-Program are drawn once per frame, however many places show the Mix.
+A Mix needs no canvas: it is drawn wherever it is shown, as every input
+already is (Program, the input bar, the MultiView, an output).
 
 ### 6.2 The Mix window
 
@@ -233,6 +274,8 @@ A tile's ⚙ on a Mix opens the Mix window instead of the layers window:
 └──────────────────────────────────────────────────────┘
 ```
 
+- The Program monitor shows the Mix source; the Preview monitor shows the
+  Mix's Preview input.
 - A click on an input button puts that input on the Mix's Preview.
 - Cut and Fade send the Mix's Preview to the Mix's Program, and the old
   Program to the Mix's Preview, as the desk does.
@@ -257,8 +300,8 @@ tally stays the main Preview's only.
 
 ### 6.5 Limits
 
-None fixed. Each Mix costs one more render of what is on its Program, every
-frame.
+None fixed. Each place that shows a Mix draws what is on its Program, as for
+any input; during a Mix's fade, both sides.
 
 ## 7. Failures
 
@@ -271,9 +314,9 @@ frame.
 | NDI or OMT has no receivers | It keeps sending; the count reads 0. |
 | No hardware encoder | x264, and the row says so. |
 | NDI's DLL is not loaded | The NDI column is greyed out, with the reason (network inputs spec §10). |
-| The input an output shows is deleted | That output goes black and its source reads "none". |
-| A Mix's Program or Preview input is deleted | That side of the Mix goes black. |
-| The scene collection is switched | The old collection's outputs, destinations and Mixes stop; the new one's start. |
+| The input an output shows is deleted | That output keeps sending, black, with its bus's sound, so its receivers and streams stay connected. Its source reads "none" until another is chosen. |
+| A Mix's Program or Preview input is deleted | That side of the Mix is black; the Mix goes on. |
+| The scene collection is switched | The new collection's output settings are applied as OK in the Outputs window would apply them: a sender whose settings are the same keeps running, black for the moment the scenes reload; one whose settings changed restarts; one the new collection does not have stops. A live RTMP destination with the same settings stays live. |
 | The PC cannot keep up | OBS drops frames in the output that falls behind; the Outputs window shows them per output. |
 
 ## 8. What is saved
@@ -285,7 +328,7 @@ All in the scene collection, as the inputs are:
 | The four outputs and their senders' settings | The desk's part of the scene collection |
 | The three RTMP destinations, including stream keys | The same, in plain text, as OBS saves stream keys |
 | SRT passphrases | The same, in plain text |
-| A Mix | Its source's settings: its canvas, its Program and Preview inputs, its transition and duration |
+| A Mix | Its source's settings: its Program and Preview inputs, its transition and duration |
 | Senders' states, receiver counts | Not saved; worked out live |
 
 A scene collection made before this change loads with every output off and no
@@ -300,6 +343,10 @@ Automated, on every build:
   which encoders, and which of them a change restarts. Tested for every
   source, a size change, an alpha change, SRT and RTMP sharing one encoder,
   and RTMP destinations on an output with nothing else on.
+- **The SRT options**: a plain function that turns the SRT fields into
+  FFmpeg's options, tested for every mode, an empty field, and a passphrase
+  and stream ID with a space, `&`, `=`, `?` and a quote, which must arrive
+  unchanged.
 - **The on-air rule** with a Mix: an input on the Mix's Program, with the Mix
   on Program, alone and as a layer; the Mix on Preview only; the Mix's
   Preview side.
@@ -311,12 +358,10 @@ By hand, added to `DESK-SMOKE.md`: every row of §1.1, then each row of §7.
 
 | Plan | Delivers | Needs |
 |---|---|---|
-| D | The output plan, canvases, the Outputs window, SRT, the RTMP destinations, the Stream button | Nothing new |
+| D | The output plan, canvases, the Program picture source, the Outputs window, the SRT plugin, the RTMP destinations, the Stream button | Nothing new |
 | E | The MultiView source | Plan D |
 | F | The OMT and NDI outputs | Plans B and C merged |
-| G | Mix inputs, their window, the on-air rule's extra step | Plan D |
-
-Plan D's first task checks the two risks of §13 that decide its approach.
+| G | Mix inputs, their window, the on-air rule's extra step | Nothing new; it can come before D |
 
 ## 11. Approaches considered
 
@@ -326,6 +371,9 @@ Plan D's first task checks the two risks of §13 that decide its approach.
 | One OBS "view" per output | The older mechanism behind OBS's virtual camera. OBS has moved to canvases, and a view does not hold its scenes. |
 | Copying frames back from the GPU ourselves, as DistroAV's main output does | Serves only NDI and OMT; SRT and RTMP would need hand-built encoder plumbing. |
 | Each output is a Mix | Rejected by the owner: an output could no longer simply carry Preview, the MultiView or one camera. |
+| Program on an output drawn by its own copy of the main transition | Draws every Program input twice per output, and a transition drawn from two mixes was untried. The main mix's finished picture is the same frame for free (§4.1). |
+| SRT through OBS's built-in MPEG-TS/SRT output | Reads SRT settings from the address, cutting a passphrase with `&`; its SRT code is OBS's own copy rather than FFmpeg's. Owner's instruction to use FFmpeg's (§4.4). |
+| A Mix as its own canvas, drawn on the main mix as a finished picture | Canvases made after the main mix are drawn after it, so the main mix would show a Mix one frame late. A Mix drawn where it is shown has no such lag (§6.1). |
 
 ## 12. Out of scope
 
@@ -342,9 +390,8 @@ Plan D's first task checks the two risks of §13 that decide its approach.
 
 | Risk | Handling |
 |---|---|
-| The main transition drawn by a second canvas (an output whose source is Program) may not draw correctly, since a transition expects one renderer. | Plan D's first task tries it. If it misbehaves, that canvas draws the current Program scene, and during a fade shows the cut at its end. |
-| OBS's SRT output may read its settings from the address, where a passphrase with `&` is cut short (the Stream / SRT input had this problem). | Plan D's first task sends to a listener with such a passphrase. If it is cut, the passphrase field refuses `&` and says why. |
-| The Mix source draws its canvas's finished frame, which may be one frame late on the main mix. | Plan G measures it first. If it is late, the Mix source draws its transition directly, and the first risk's answer applies. |
-| CPU load: NDI and plain OMT encode on the CPU, about one core per 1080p60 sender; each Mix and each canvas is one more render on the GPU. | The Outputs window shows each output's dropped frames. OMT-HX moves OMT's encoding to the GPU. |
+| The Program picture relies on OBS drawing the main mix before every other mix in a frame (`output_frames` in `libobs/obs-video.c` walks the mixes in the order they were made, and the main mix is made at start). | Plan D's first task shows a frame counter on Program and on an output set to Program and checks they match, during a fade too. The order is on the list of things checked after every upstream merge. |
+| An SRT listener that nobody calls, or a caller whose listener is gone, waits inside FFmpeg. | It waits on its own thread, and FFmpeg's interrupt callback ends the wait when the output is stopped or the program closes (Plan D checks both). |
+| CPU load: NDI and plain OMT encode on the CPU, about one core per 1080p60 sender; each output's canvas is one more render on the GPU, and each place that shows a Mix draws its Program. | The Outputs window shows each output's dropped frames. OMT-HX moves OMT's encoding to the GPU. |
 | Hiding OBS's Start Streaming button relies on its object name. | Found by name, logged when absent, and added to the desk's checks after every upstream merge (desk smoke checklist, section C). |
 | Stream keys in the scene collection travel with the show file. | Approved with the design (O12). OBS's own `service.json` holds keys in plain text too. |
