@@ -199,4 +199,26 @@ StreamTarget streamTarget(const StreamForm &form)
 	return target;
 }
 
+SrtOutputTarget srtOutputTarget(const StreamForm &form)
+{
+	SrtOutputTarget target;
+	const char *mode = form.type == StreamType::SrtCaller     ? "caller"
+			   : form.type == StreamType::SrtListener ? "listener"
+								  : "rendezvous";
+	target.url = "srt://" + hostPort(form.host, "0.0.0.0", form.port);
+
+	/* FFmpeg takes SRT's latency in microseconds */
+	target.options.emplace_back("mode", mode);
+	target.options.emplace_back("latency", std::to_string((long long)form.latencyMs * 1000));
+	if (!form.passphrase.empty()) {
+		const int length = (form.keyLength == 16 || form.keyLength == 24) ? form.keyLength : 32;
+		target.options.emplace_back("passphrase", form.passphrase);
+		target.options.emplace_back("pbkeylen", std::to_string(length));
+	}
+	if (!form.streamId.empty()) {
+		target.options.emplace_back("streamid", form.streamId);
+	}
+	return target;
+}
+
 } // namespace desk

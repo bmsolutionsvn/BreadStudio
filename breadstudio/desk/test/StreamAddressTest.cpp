@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 
 using namespace desk;
 
@@ -222,6 +223,43 @@ int main()
 		b = a;
 		b.hardwareDecoder = false;
 		CHECK(!(a == b));
+	}
+
+	/* An output's SRT: the address is host and port only, and every value is its own option,
+	 * unquoted, because it goes to FFmpeg one by one (outputs spec §4.4) */
+	{
+		StreamForm form = srt(StreamType::SrtCaller, "receiver.example");
+		form.port = 9000;
+		form.latencyMs = 120;
+		SrtOutputTarget target = srtOutputTarget(form);
+		CHECK(target.url == "srt://receiver.example:9000");
+		CHECK(target.options.size() == 2);
+		CHECK(target.options[0] == std::make_pair(std::string("mode"), std::string("caller")));
+		CHECK(target.options[1] == std::make_pair(std::string("latency"), std::string("120000")));
+	}
+	{
+		StreamForm form = srt(StreamType::SrtListener, "");
+		form.port = 9001;
+		form.passphrase = "a&b=c?d e'f\"g";
+		form.keyLength = 16;
+		form.streamId = "#!::r=live/one,m=publish";
+		SrtOutputTarget target = srtOutputTarget(form);
+		CHECK(target.url == "srt://0.0.0.0:9001");
+		CHECK(target.options.size() == 5);
+		CHECK(target.options[0].second == "listener");
+		CHECK(target.options[2] == std::make_pair(std::string("passphrase"), std::string("a&b=c?d e'f\"g")));
+		CHECK(target.options[3] == std::make_pair(std::string("pbkeylen"), std::string("16")));
+		CHECK(target.options[4] ==
+		      std::make_pair(std::string("streamid"), std::string("#!::r=live/one,m=publish")));
+	}
+	{
+		StreamForm form = srt(StreamType::SrtRendezvous, "fd00::5");
+		form.passphrase = "0123456789";
+		form.keyLength = 7; /* not one of SRT's: 32 */
+		SrtOutputTarget target = srtOutputTarget(form);
+		CHECK(target.url == "srt://[fd00::5]:5000");
+		CHECK(target.options[0].second == "rendezvous");
+		CHECK(target.options[3].second == "32");
 	}
 
 	if (failures == 0) {

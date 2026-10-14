@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace desk {
 
@@ -41,5 +43,15 @@ const char *streamProblem(const StreamForm &form);
 
 /* The address and options for a form. Call only when streamProblem() is null. */
 StreamTarget streamTarget(const StreamForm &form);
+
+/* What an output's SRT sender is given: the address with host and port only, and FFmpeg's `srt`
+ * options one by one, each value exactly as typed (outputs spec §4.4). */
+struct SrtOutputTarget {
+	std::string url;
+	std::vector<std::pair<std::string, std::string>> options;
+};
+
+/* Call only for an SRT type whose streamProblem() is null. */
+SrtOutputTarget srtOutputTarget(const StreamForm &form);
 
 } // namespace desk
