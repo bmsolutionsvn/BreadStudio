@@ -89,6 +89,30 @@ that speaks SRT; the sender lines are in
    `Number of memory leaks: 0`, no line containing `remaining`, and none
    containing `must be a top level window`.
 
+## F. OMT inputs and tally
+
+Spec: `2026-10-14-breadstudio-network-inputs-design.md`. Needs the OMT-HX test
+sender, `..\OMT-HX\build\release\omthx-send.exe`; then BreadCamera and vMix
+29's OMT output as real senders.
+
+1. With three test senders running (`--mode full`, `--mode hx --codec hevc`,
+   `--mode hx --codec h264 --alpha`), each tile on the OMT tab names its
+   format, size and frame rate within two seconds, before anything is added.
+2. An input made from each shows its picture; the H.264 one shows its alpha.
+   With `--tone` on a sender, its strip moves and the tone is heard.
+3. A sender restarted in the other codec comes back by itself in the same
+   input, and ⚙, Base properties… then names the new format and the decoder.
+4. Tally, read in the sender's `tally` column: only a tile in the bar reads
+   nothing; on Preview `PVW`; on Program, alone or as a layer, `PGM`; a layer
+   unticked drops `PGM`; AFV unlit with something else on Program reads
+   nothing; a three-second fade holds `PGM` to its end; with Studio Mode off
+   a click reads `PGM`.
+5. A BreadCamera on another PC, and vMix 29's OMT output, each appear under
+   their PC's name with the right format, play, and show tally.
+6. `bread-omt-test`, `bread-onair-test` and `bread-sources-test` pass.
+7. After closing with one OMT input of each format in the collection, the
+   log has `Number of memory leaks: 0`.
+
 ## Before a run
 
 - The build folder must hold no copies of plugin files. OBS loads every DLL in

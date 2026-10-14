@@ -1,5 +1,7 @@
 # BreadStudio S2a — OMT-HX input source on omthx Implementation Plan
 
+> **Replaced by `2026-10-14-breadstudio-omt-input.md`** (2026-10-14). That plan folds Tasks 1 to 5 below into its Tasks 2 to 4, replaces Task 6 with the OMT tab, adds the format check, and reads tally from each item's visible flag. Keep this file for its history only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** An OBS input source, `OMT-HX Source`, that plays any Open Media Transport source — a BreadCamera over plain OMT or OMT-HX, with audio and alpha — by driving the merged `omthx` library, and sends tally back to the sender from OBS's program and preview state.
