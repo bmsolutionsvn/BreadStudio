@@ -15,6 +15,7 @@
 
 #include "Catalog.hpp"
 #include "Describe.hpp"
+#include "OnAir.hpp"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("omt-hx", "en-US")
@@ -32,6 +33,9 @@ struct omt_source {
 	std::thread worker;
 	std::atomic<bool> run{false};
 	std::vector<uint8_t> scratch; /* a straight-alpha picture, premultiplied */
+	float tallyWait = 0.0f;       /* seconds since the tally was last worked out; graphics thread */
+	bool tallySent = false;       /* false until rx has been told; guarded by rxMutex */
+	omthx::Tally sentTally;       /* guarded by rxMutex */
 };
 
 void worker_main(omt_source *s)
@@ -104,6 +108,47 @@ void stop_receiver(omt_source *s)
 	s->rx.reset();
 }
 
+/* Runs on the UI thread, where the frontend may be asked. param is a weak reference taken by
+ * omt_tick; holding the source keeps its data alive. libomt sends the tally again by itself
+ * whenever the receiver reconnects, so it is sent here only when it changes. */
+void update_tally(void *param)
+{
+	auto *weak = static_cast<obs_weak_source_t *>(param);
+	obs_source_t *source = obs_weak_source_get_source(weak);
+	obs_weak_source_release(weak);
+	if (!source) {
+		return;
+	}
+
+	const bread::OnAir on = bread::onAir(source);
+	omthx::Tally tally;
+	tally.preview = on.preview;
+	tally.program = on.program;
+
+	auto *s = static_cast<omt_source *>(obs_obj_get_data(source));
+	if (s) {
+		std::lock_guard lock(s->rxMutex);
+		if (s->rx && (!s->tallySent || tally != s->sentTally)) {
+			s->rx->setTally(tally);
+			s->sentTally = tally;
+			s->tallySent = true;
+		}
+	}
+	obs_source_release(source);
+}
+
+/* OBS calls this every frame for every source, on screen or not: ten times a second is enough */
+void omt_tick(void *data, float seconds)
+{
+	auto *s = static_cast<omt_source *>(data);
+	s->tallyWait += seconds;
+	if (s->tallyWait < 0.1f) {
+		return;
+	}
+	s->tallyWait = 0.0f;
+	obs_queue_task(OBS_TASK_UI, update_tally, obs_source_get_weak_source(s->source), false);
+}
+
 /* A receiver keeps trying by itself while its sender is away, and follows it when it comes back
  * in another format. */
 void omt_update(void *data, obs_data_t *settings)
@@ -130,6 +175,7 @@ void omt_update(void *data, obs_data_t *settings)
 	{
 		std::lock_guard lock(s->rxMutex);
 		s->rx = std::move(rx);
+		s->tallySent = false;
 	}
 	s->run = true;
 	s->worker = std::thread(worker_main, s);
@@ -209,6 +255,7 @@ static const obs_source_info omt_hx_source = {
 	.get_defaults = omt_defaults,
 	.get_properties = omt_properties,
 	.update = omt_update,
+	.video_tick = omt_tick,
 	.icon_type = OBS_ICON_TYPE_CAMERA,
 };
 

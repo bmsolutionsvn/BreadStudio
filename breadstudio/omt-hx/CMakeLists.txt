@@ -36,6 +36,7 @@ target_include_directories(
   omt-hx
   PRIVATE "${OMTHX_ROOT}/include" "${OMTHX_ROOT}/src" "${OMTHX_ROOT}/third_party/libomt"
 )
+target_include_directories(omt-hx PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
 
 target_link_libraries(
   omt-hx
@@ -71,4 +72,14 @@ set_target_properties(
     CXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/omt-hx/test-bin"
     FOLDER plugins/omt-hx
+)
+
+# The on-air rule against a small scene tree. Runs with libobs and needs obs.dll on PATH. Plan C's NDI
+# plugin shares the header; the test lives here, with its first user.
+add_executable(bread-onair-test "${CMAKE_SOURCE_DIR}/breadstudio/shared/test/OnAirTest.cpp")
+target_include_directories(bread-onair-test PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
+target_link_libraries(bread-onair-test PRIVATE OBS::libobs OBS::frontend-api)
+set_target_properties(
+  bread-onair-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/omt-hx/test-bin" FOLDER plugins/omt-hx
 )
