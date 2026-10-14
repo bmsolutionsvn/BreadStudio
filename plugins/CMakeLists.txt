@@ -106,3 +106,4 @@ add_obs_plugin(win-dshow PLATFORMS WINDOWS)
 add_obs_plugin(win-wasapi PLATFORMS WINDOWS)
 
 add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/desk" "${CMAKE_BINARY_DIR}/breadstudio/desk")
+add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/omt-hx" "${CMAKE_BINARY_DIR}/breadstudio/omt-hx")
