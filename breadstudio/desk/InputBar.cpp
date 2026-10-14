@@ -314,6 +314,16 @@ void InputBar::refresh()
 		}
 	}
 
+	/* the same for a base's page */
+	for (InputSelect *open : settingsParent()->findChildren<InputSelect *>()) {
+		const bool alive = !open->input() ||
+				   std::any_of(sources.begin(), sources.end(),
+					       [open](const OBSSource &input) { return input.Get() == open->input(); });
+		if (!alive) {
+			delete open;
+		}
+	}
+
 	layoutTiles();
 	updateTally();
 	updateOutputs();

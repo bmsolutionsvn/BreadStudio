@@ -3,11 +3,14 @@
 #include "InputPage.hpp"
 #include "StreamAddress.hpp"
 
+#include <QTimer>
+
 class QCheckBox;
 class QComboBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
+class QPlainTextEdit;
 class QSpinBox;
 
 namespace desk {
@@ -20,8 +23,12 @@ public:
 	/* for a new stream input */
 	explicit StreamPage(QWidget *parent);
 
+	/* for a stream input that exists */
+	StreamPage(obs_source_t *base, QWidget *parent);
+
 	bool ready() const override;
 	OBSSource create() override;
+	void apply() override;
 
 	/* true when this source is the base of a stream input made on this page */
 	static bool isStream(obs_source_t *base);
@@ -41,6 +48,13 @@ protected:
 private:
 	void typeChanged();
 	void formChanged();
+	void pollState();
+
+	OBSSource base;    /* null for a new input */
+	StreamForm before; /* the form when the page opened */
+	QPlainTextEdit *status = nullptr;
+	int lastState = -1;
+	QTimer timer;
 
 	QComboBox *type = nullptr;
 	QLabel *hostLabel = nullptr;

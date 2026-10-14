@@ -150,6 +150,25 @@ InputSelect::InputSelect(QWidget *parent) : QDialog(parent), pageOf(std::size(ki
 	list->setCurrentRow(0);
 }
 
+InputSelect::InputSelect(obs_source_t *input, QWidget *parent) : QDialog(parent), existing(input)
+{
+	setWindowTitle(text("Settings.Title").arg(QString::fromUtf8(obs_source_get_name(existing))));
+	resize(760, 620);
+
+	auto *outer = new QVBoxLayout(this);
+	pages = new QStackedWidget(this);
+	outer->addWidget(pages, 1);
+
+	OBSSource base = baseSource(existing);
+	InputPage *only = StreamPage::isStream(base) ? static_cast<InputPage *>(new StreamPage(base.Get(), pages))
+						     : static_cast<InputPage *>(new PropertiesPage(base.Get(), pages));
+	pages->addWidget(only);
+	connect(only, &InputPage::readyChanged, this, &InputSelect::syncOk);
+
+	addButtons(outer);
+	syncOk();
+}
+
 void InputSelect::addButtons(QVBoxLayout *outer)
 {
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -196,6 +215,12 @@ void InputSelect::accept()
 		return;
 	}
 
+	if (existing) {
+		current->apply();
+		QDialog::accept();
+		return;
+	}
+
 	OBSSource made = current->create();
 	if (!made) {
 		QMessageBox::warning(this, windowTitle(), text("InputSelect.Failed"));
@@ -208,6 +233,11 @@ void InputSelect::accept()
 
 void InputSelect::reject()
 {
+	if (existing) {
+		if (InputPage *current = page()) {
+			current->revert();
+		}
+	}
 	QDialog::reject();
 }
 

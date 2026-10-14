@@ -22,6 +22,17 @@ PropertiesPage::PropertiesPage(const char *unversionedId, const char *nameKey_, 
 	build();
 }
 
+PropertiesPage::PropertiesPage(obs_source_t *existing, QWidget *parent) : InputPage(parent), source(existing)
+{
+	if (source) {
+		OBSDataAutoRelease now = obs_source_get_settings(source);
+		OBSDataAutoRelease copy = obs_data_create();
+		obs_data_apply(copy, now);
+		before = copy.Get();
+	}
+	build();
+}
+
 void PropertiesPage::build()
 {
 	auto *layout = new QVBoxLayout(this);
@@ -42,8 +53,8 @@ void PropertiesPage::build()
 
 OBSSource PropertiesPage::create()
 {
-	if (!source) {
-		return OBSSource();
+	if (!source || before) {
+		return OBSSource(); /* nothing to make: no such type, or the page is for a source that exists */
 	}
 
 	OBSDataAutoRelease now = obs_source_get_settings(source);
@@ -57,6 +68,19 @@ OBSSource PropertiesPage::create()
 	obs_wait_for_destroy_queue();
 
 	return createInput(typeId.c_str(), obs_module_text(nameKey.c_str()), settings);
+}
+
+/* as OBS's own properties window does on Cancel */
+void PropertiesPage::revert()
+{
+	if (!source || !before) {
+		return;
+	}
+
+	OBSDataAutoRelease settings = obs_source_get_settings(source);
+	obs_data_clear(settings);
+	obs_data_apply(settings, before);
+	obs_source_update(source, before);
 }
 
 } // namespace desk

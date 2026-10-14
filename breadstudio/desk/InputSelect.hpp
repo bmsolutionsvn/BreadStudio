@@ -23,6 +23,9 @@ public:
 	/* the whole window, to make a new input */
 	explicit InputSelect(QWidget *parent);
 
+	/* one page and no list, for the base of an input that exists */
+	InputSelect(obs_source_t *input, QWidget *parent);
+
 	/* the input this window is for; null when it makes a new one */
 	obs_source_t *input() const { return existing; }
 

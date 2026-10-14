@@ -7,7 +7,10 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QPushButton>
 #include <QSpinBox>
+#include <QTime>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -27,6 +30,72 @@ StreamPage::StreamPage(QWidget *parent) : InputPage(parent)
 {
 	buildForm();
 	setForm(StreamForm());
+}
+
+StreamPage::StreamPage(obs_source_t *base_, QWidget *parent) : InputPage(parent), base(base_)
+{
+	buildForm();
+	loadForm(base, before);
+	setForm(before);
+
+	/* the status box: this input's connection, as it changes (spec §5.3) */
+	auto *layout = static_cast<QVBoxLayout *>(this->layout());
+	status = new QPlainTextEdit(this);
+	status->setReadOnly(true);
+	layout->insertWidget(layout->count() - 1, status, 10);
+	auto *clear = new QPushButton(text("Stream.Clear"), this);
+	connect(clear, &QPushButton::clicked, status, &QPlainTextEdit::clear);
+	layout->insertWidget(layout->count() - 1, clear, 0, Qt::AlignRight);
+
+	connect(&timer, &QTimer::timeout, this, &StreamPage::pollState);
+	timer.start(500);
+	pollState();
+}
+
+void StreamPage::pollState()
+{
+	const int state = (int)obs_source_media_get_state(base);
+	if (state == lastState) {
+		return;
+	}
+	lastState = state;
+
+	const char *key = "Stream.State.Stopped";
+	switch ((enum obs_media_state)state) {
+	case OBS_MEDIA_STATE_OPENING:
+		key = "Stream.State.Opening";
+		break;
+	case OBS_MEDIA_STATE_BUFFERING:
+		key = "Stream.State.Buffering";
+		break;
+	case OBS_MEDIA_STATE_PLAYING:
+		key = "Stream.State.Playing";
+		break;
+	case OBS_MEDIA_STATE_ENDED:
+		key = "Stream.State.Lost";
+		break;
+	case OBS_MEDIA_STATE_ERROR:
+		key = "Stream.State.Error";
+		break;
+	default:
+		break;
+	}
+	status->appendPlainText(QString("%1  %2").arg(QTime::currentTime().toString("HH:mm:ss"), text(key)));
+}
+
+/* Every change to a network Media Source restarts the stream, so nothing is written unless
+ * the form changed. */
+void StreamPage::apply()
+{
+	const StreamForm value = form();
+	if (!base || streamProblem(value) || value == before) {
+		return;
+	}
+
+	OBSDataAutoRelease settings = mediaSettings(value);
+	obs_source_update(base, settings);
+	saveForm(base, value);
+	before = value;
 }
 
 void StreamPage::buildForm()
@@ -208,7 +277,8 @@ bool StreamPage::isStream(obs_source_t *base)
 OBSSource StreamPage::create()
 {
 	const StreamForm value = form();
-	if (streamProblem(value)) {
+	if (base || streamProblem(value)) {
+		/* nothing to make: the page is for a source that exists, or the form is not ready */
 		return OBSSource();
 	}
 

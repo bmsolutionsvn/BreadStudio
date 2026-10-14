@@ -1,6 +1,7 @@
 #include "InputSettings.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "InputSelect.hpp"
 
 #include <obs-frontend-api.h>
 
@@ -24,11 +25,14 @@ InputSettings::InputSettings(obs_source_t *input, QWidget *parent) : QDialog(par
 	/* an empty scene made outside the desk has no base */
 	auto *baseButton = new QPushButton(text("Settings.Base"), this);
 	baseButton->setEnabled(baseSource(source).Get() != nullptr);
+	/* the page this input was made on, filled in (network inputs spec §3.2) */
 	connect(baseButton, &QPushButton::clicked, this, [this] {
-		OBSSource base = baseSource(source);
-		if (base) {
-			obs_frontend_open_source_properties(base);
+		if (!baseSource(source)) {
+			return;
 		}
+		auto *window = new InputSelect(source, parentWidget());
+		window->setAttribute(Qt::WA_DeleteOnClose);
+		window->open();
 	});
 	layout->addWidget(baseButton);
 
