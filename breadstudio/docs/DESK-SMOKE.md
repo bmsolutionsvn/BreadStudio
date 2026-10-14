@@ -8,7 +8,7 @@ Spec: `2026-10-13-breadstudio-s1-desk-design.md`.
 
 Start from a first run (no settings folder).
 
-1. With + Add alone, make: camera 1, camera 2, the media file, a Blank with
+1. With Add Input alone, make: camera 1, camera 2, the media file, a Blank with
    both cameras as layers placed side by side, and the microphone.
 2. Open View → Multiview on the second monitor. Cut and fade between the four
    picture inputs for two minutes. On the bar and on the multiview, the red
@@ -60,6 +60,34 @@ Start from a first run (no settings folder).
    sources, a scene with a group, a scene holding another scene, and an
    empty scene. Every scene is a tile and switches. The empty one is black,
    its ♪ is greyed out, and its ⚙ window has "Base properties…" greyed out.
+
+## E. Input Select and streams
+
+Spec: `2026-10-14-breadstudio-network-inputs-design.md`. Needs an `ffmpeg.exe`
+that speaks SRT; the sender lines are in
+`2026-10-14-breadstudio-input-select.md`, Task 3 Step 6.
+
+1. Add Input opens the Input Select window. Every row makes its kind of
+   input, and no other window opens. Visiting every row and pressing Cancel
+   makes nothing.
+2. An SRT listener input shows a caller's picture within five seconds, and
+   again within five seconds of that caller being restarted.
+3. An SRT caller input with a passphrase that has a space in it, a key
+   length of 16 and a stream ID shows the listener's picture. With one
+   character of the passphrase wrong it stays black and the program stays
+   responsive.
+4. A Transport Stream over UDP input and an RTSP over TCP input each show
+   their sender's picture.
+5. ⚙, Base properties… on a stream input shows the form filled in and the
+   status box. OK with nothing changed does not interrupt the picture. A
+   changed port takes effect.
+6. ⚙, Base properties… on a Colour input: a change shows at once, and Cancel
+   puts the old colour back.
+7. A listener input nobody calls can be deleted at once, and the program
+   closes within five seconds with one in the collection.
+8. After closing with one input of each kind in the collection, the log has
+   `Number of memory leaks: 0`, no line containing `remaining`, and none
+   containing `must be a top level window`.
 
 ## Before a run
 
