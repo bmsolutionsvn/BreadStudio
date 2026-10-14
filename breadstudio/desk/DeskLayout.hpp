@@ -10,4 +10,8 @@ bool applyLayout();
 /* applyLayout, the first time the program runs with the desk */
 void applyLayoutOnFirstRun();
 
+/* OBS's own Start Streaming button: the desk's Stream button runs the RTMP destinations instead
+ * (outputs spec §4.5). Found by its name; when it is not found, the log says so and it stays. */
+void hideObsStreamButton();
+
 } // namespace desk

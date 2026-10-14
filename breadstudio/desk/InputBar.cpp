@@ -3,7 +3,9 @@
 #include "InputModel.hpp"
 #include "InputSelect.hpp"
 #include "InputSettings.hpp"
+#include "OutputEngine.hpp"
 #include "OutputsWindow.hpp"
+#include "StreamWindow.hpp"
 #include "TileDisplay.hpp"
 
 #include <obs-frontend-api.h>
@@ -127,22 +129,62 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	});
 	footer->addWidget(record);
 
+	/* the RTMP destinations (outputs spec §3.2), not OBS's own stream */
 	stream = new QPushButton(text("Stream"), this);
-	connect(stream, &QPushButton::clicked, this, [] {
-		if (obs_frontend_streaming_active()) {
-			obs_frontend_streaming_stop();
+	connect(stream, &QPushButton::clicked, this, [this] {
+		OutputEngine &engine = OutputEngine::instance();
+		if (engine.streaming()) {
+			engine.setStreaming(false);
 		} else {
-			obs_frontend_streaming_start();
+			bool any = false;
+			for (const Destination &destination : engine.config().destinations) {
+				any = any || destination.on;
+			}
+			if (!any) {
+				QMessageBox::information(window(), text("Stream"), text("Stream.NoneOn"));
+				openStreamWindow();
+				return;
+			}
+			engine.setStreaming(true);
 		}
+		updateOutputs();
 	});
 	footer->addWidget(stream);
+
+	auto *streamSettings = new QPushButton(QString::fromUtf8(GearGlyph), this);
+	streamSettings->setToolTip(text("Stream.Title"));
+	connect(streamSettings, &QPushButton::clicked, this, [this] { openStreamWindow(); });
+	footer->addWidget(streamSettings);
+
+	/* the button is red while any destination is live, and says so */
+	connect(&streamTimer, &QTimer::timeout, this, &InputBar::updateOutputs);
+	streamTimer.start(1000);
 	footer->addStretch(1);
 }
 
 void InputBar::updateOutputs()
 {
 	record->setText(text(obs_frontend_recording_active() ? "Record.Stop" : "Record"));
-	stream->setText(text(obs_frontend_streaming_active() ? "Stream.Stop" : "Stream"));
+
+	OutputEngine &engine = OutputEngine::instance();
+	bool anyLive = false;
+	for (int d = 0; d < DestinationCount; d++) {
+		anyLive = anyLive || engine.destinationStatus(d).state == SenderState::Live;
+	}
+	stream->setText(text(engine.streaming() ? "Stream.Stop" : "Stream"));
+	stream->setStyleSheet(anyLive ? "background-color: #d00000; color: white;" : "");
+}
+
+void InputBar::openStreamWindow()
+{
+	for (StreamWindow *open : settingsParent()->findChildren<StreamWindow *>()) {
+		open->raise();
+		open->activateWindow();
+		return;
+	}
+	auto *window = new StreamWindow(settingsParent());
+	window->setAttribute(Qt::WA_DeleteOnClose);
+	window->show();
 }
 
 /* the scroll bar's width is always left free, so the count does not change when it appears */
@@ -379,6 +421,7 @@ void InputBar::updateTally()
 void InputBar::clear()
 {
 	qDeleteAll(settingsParent()->findChildren<OutputsWindow *>());
+	qDeleteAll(settingsParent()->findChildren<StreamWindow *>());
 	qDeleteAll(settingsParent()->findChildren<InputSelect *>());
 	qDeleteAll(settingsParent()->findChildren<InputSettings *>());
 	sources.clear();

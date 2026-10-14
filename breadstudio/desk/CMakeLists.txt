@@ -75,6 +75,8 @@ target_sources(
     StreamAddress.hpp
     StreamPage.cpp
     StreamPage.hpp
+    StreamWindow.cpp
+    StreamWindow.hpp
     TileDisplay.cpp
     TileDisplay.hpp
 )

@@ -3,6 +3,7 @@
 #include <obs.hpp>
 
 #include <QPoint>
+#include <QTimer>
 #include <QWidget>
 
 #include <vector>
@@ -33,6 +34,7 @@ public:
 
 	void syncAudioButtons(); /* set each tile's audio button from its base's mute state */
 	void updateOutputs();    /* Record and Stream follow OBS's outputs */
+	void openStreamWindow(); /* the three RTMP destinations (outputs spec §3.2) */
 
 protected:
 	void resizeEvent(QResizeEvent *event) override;
@@ -56,6 +58,7 @@ private:
 	QVBoxLayout *rows;
 	QPushButton *record;
 	QPushButton *stream;
+	QTimer streamTimer;
 	int perRow = 0;
 	std::vector<TileDisplay *> displays;     /* one per row */
 	std::vector<QLabel *> headers;           /* one per tile */

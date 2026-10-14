@@ -6,6 +6,7 @@
 
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QPushButton>
 
 namespace desk {
 
@@ -71,6 +72,17 @@ void applyLayoutOnFirstRun()
 		config_set_bool(config, "BreadDesk", "LayoutApplied", true);
 		config_save_safe(config, "tmp", nullptr);
 	}
+}
+
+void hideObsStreamButton()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	QPushButton *button = main ? main->findChild<QPushButton *>("streamButton") : nullptr;
+	if (!button) {
+		blog(LOG_WARNING, "[bread-desk] OBS's 'streamButton' was not found; it stays");
+		return;
+	}
+	button->setVisible(false);
 }
 
 } // namespace desk

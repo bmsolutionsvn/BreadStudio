@@ -85,6 +85,7 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
 		load();
 		applyLayoutOnFirstRun();
+		hideObsStreamButton();
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
 		load();

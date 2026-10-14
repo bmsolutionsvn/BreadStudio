@@ -80,7 +80,7 @@ On the production PC, with a second PC running vMix 29 or NDI Tools:
 | Source | Program | Program, Preview, MultiView, or one input |
 | Size | OBS's output resolution (Settings → Video) | Same as Program, 3840×2160, 1920×1080 or 1280×720 |
 | Alpha | No | When the source is an input |
-| Audio | Bus M, A to E, or none | Bus M, A to E, or none |
+| Audio | Bus M or A to E | Bus M or A to E |
 | NDI | On or off | On or off |
 | OMT | Off, OMT (VMX), OMT-HX HEVC, or OMT-HX H.264 | The same |
 | SRT | Off, or a caller, listener or rendezvous with its settings (§3.4) | The same |
@@ -91,6 +91,8 @@ On the production PC, with a second PC running vMix 29 or NDI Tools:
 - An output's audio is one of OBS's six tracks, which are the desk's buses
   M and A to E. An output carrying one input carries that bus, not only that
   input's sound.
+- OBS has six audio tracks and the desk uses all six as buses, so there is no
+  silent track: for an output without sound, pick a bus nothing is sent to.
 - Alpha is offered only where it can be carried: NDI and OMT send it; SRT and
   RTMP drop it.
 - Senders are named `<PC> (BreadStudio Output N)` on the network, as vMix
