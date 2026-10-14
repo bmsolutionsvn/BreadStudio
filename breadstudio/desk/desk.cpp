@@ -12,6 +12,7 @@
 #include "InputBar.hpp"
 #include "InputModel.hpp"
 #include "Mixer.hpp"
+#include "MultiviewSource.hpp"
 #include "OutputEngine.hpp"
 #include "ProgramSource.hpp"
 
@@ -175,6 +176,7 @@ static void saveOutputs(obs_data_t *data, bool saving, void *)
 bool obs_module_load(void)
 {
 	registerProgramSource();
+	registerMultiviewSource();
 	busMeters().start();
 
 	bar = new InputBar();

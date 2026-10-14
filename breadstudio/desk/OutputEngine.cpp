@@ -115,7 +115,7 @@ OBSSource OutputEngine::sourceFor(int output) const
 		}
 		return OBSSource(program.Get()); /* with Studio Mode off, Preview is Program */
 	case OutputSource::MultiView:
-		return OBSSource(); /* Plan E fills this in */
+		return OBSSource(multiview.Get());
 	case OutputSource::Input: {
 		OBSSourceAutoRelease input = obs_get_source_by_uuid(config.input.c_str());
 		if (input && !obs_source_removed(input)) {
@@ -147,6 +147,11 @@ void OutputEngine::refreshSources()
 	for (int i = 0; i < OutputCount; i++) {
 		show(i);
 	}
+
+	/* the multiview reads what the desk shows; gather it now, on this thread */
+	if (multiview) {
+		refreshMultiview(multiview);
+	}
 }
 
 void OutputEngine::detachSources()
@@ -154,6 +159,10 @@ void OutputEngine::detachSources()
 	detached = true;
 	for (int i = 0; i < OutputCount; i++) {
 		show(i);
+	}
+	/* let go of the scenes of the collection that is going */
+	if (multiview) {
+		clearMultiview(multiview);
 	}
 }
 
@@ -324,6 +333,9 @@ void OutputEngine::reconcile(const OutputsConfig &next, bool nextLive)
 	if (!program) {
 		program = obs_source_create_private(ProgramSourceId, "BreadStudio Program", nullptr);
 	}
+	if (!multiview) {
+		multiview = obs_source_create_private(MultiviewSourceId, "BreadStudio MultiView", nullptr);
+	}
 
 	/* start from the inside out */
 	for (int i = 0; i < OutputCount; i++) {
@@ -372,6 +384,7 @@ void OutputEngine::shutdown()
 		r.shown = nullptr;
 	}
 	program = nullptr;
+	multiview = nullptr;
 	live = false;
 }
 

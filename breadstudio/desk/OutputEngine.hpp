@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MultiviewSource.hpp"
 #include "OutputPlan.hpp"
 
 #include <obs.hpp>
@@ -86,7 +87,8 @@ private:
 	std::array<Running, OutputCount> running;
 	std::array<OBSServiceAutoRelease, DestinationCount> services;
 	std::array<OBSOutputAutoRelease, DestinationCount> rtmp;
-	OBSSourceAutoRelease program; /* one bread_program for every output that shows Program */
+	OBSSourceAutoRelease program;   /* one bread_program for every output that shows Program */
+	OBSSourceAutoRelease multiview; /* one bread_multiview for every output that shows MultiView */
 };
 
 } // namespace desk

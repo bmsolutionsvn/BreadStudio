@@ -51,6 +51,10 @@ target_sources(
     Meter.hpp
     Mixer.cpp
     Mixer.hpp
+    MultiviewLayout.cpp
+    MultiviewLayout.hpp
+    MultiviewSource.cpp
+    MultiviewSource.hpp
     NdiTab.cpp
     NdiTab.hpp
     OmtTab.cpp
