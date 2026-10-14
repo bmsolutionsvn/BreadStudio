@@ -55,6 +55,12 @@ target_sources(
     NdiTab.hpp
     OmtTab.cpp
     OmtTab.hpp
+    OutputEngine.cpp
+    OutputEngine.hpp
+    OutputPlan.cpp
+    OutputPlan.hpp
+    ProgramSource.cpp
+    ProgramSource.hpp
     PropertiesPage.cpp
     PropertiesPage.hpp
     SourceList.cpp

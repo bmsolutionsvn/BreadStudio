@@ -12,6 +12,8 @@
 #include "InputBar.hpp"
 #include "InputModel.hpp"
 #include "Mixer.hpp"
+#include "OutputEngine.hpp"
+#include "ProgramSource.hpp"
 
 #include <vector>
 
@@ -32,6 +34,9 @@ static InputBar *bar = nullptr; /* owned by its dock */
 
 static Mixer *mixer = nullptr; /* owned by its dock */
 
+/* a scene collection's outputs, read while it loads and started once its scenes exist */
+static OutputsConfig pendingOutputs;
+
 namespace desk {
 void inputsChanged()
 {
@@ -41,6 +46,7 @@ void inputsChanged()
 	bed().sync();
 	bar->refresh();
 	mixer->rebuild();
+	OutputEngine::instance().refreshSources();
 }
 } // namespace desk
 
@@ -57,10 +63,15 @@ static void load()
 	bed().rebuild();
 	bar->refresh();
 	mixer->rebuild();
+	/* senders whose settings did not change keep running (outputs spec §7) */
+	OutputEngine::instance().apply(pendingOutputs);
+	OutputEngine::instance().refreshSources();
 }
 
 static void unload()
 {
+	/* black, senders running, and no scene of the old collection held */
+	OutputEngine::instance().detachSources();
 	loaded = false;
 	bar->clear();
 	mixer->clear();
@@ -83,6 +94,7 @@ static void onEvent(enum obs_frontend_event event, void *)
 		unload();
 		break;
 	case OBS_FRONTEND_EVENT_EXIT:
+		OutputEngine::instance().shutdown();
 		unload();
 		busMeters().stop();
 		signal_handler_disconnect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
@@ -106,6 +118,7 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
 		if (loaded) {
 			bar->updateTally();
+			OutputEngine::instance().refreshSources();
 		}
 		break;
 	default:
@@ -149,8 +162,18 @@ static void saveNumberHotkeys(obs_data_t *data, bool saving, void *)
 	}
 }
 
+static void saveOutputs(obs_data_t *data, bool saving, void *)
+{
+	if (saving) {
+		OutputEngine::instance().save(data);
+	} else {
+		pendingOutputs = OutputEngine::instance().load(data);
+	}
+}
+
 bool obs_module_load(void)
 {
+	registerProgramSource();
 	busMeters().start();
 
 	bar = new InputBar();
@@ -169,6 +192,7 @@ bool obs_module_load(void)
 							       (void *)(uintptr_t)i);
 	}
 	obs_frontend_add_save_callback(saveNumberHotkeys, nullptr);
+	obs_frontend_add_save_callback(saveOutputs, nullptr);
 
 	obs_frontend_add_tools_menu_item(obs_module_text("DeskLayout"), [](void *) { applyLayout(); }, nullptr);
 
