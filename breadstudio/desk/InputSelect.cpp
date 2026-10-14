@@ -2,6 +2,7 @@
 #include "Desk.hpp"
 #include "InputModel.hpp"
 #include "InputPage.hpp"
+#include "NdiTab.hpp"
 #include "OmtTab.hpp"
 #include "PropertiesPage.hpp"
 #include "StreamPage.hpp"
@@ -73,7 +74,7 @@ private:
 };
 
 /* The OMT / Desktop Capture row: one tab per kind, as vMix groups them (spec §4). A tab whose plugin
- * is not in the build is left out. Plan C puts NDI in front. */
+ * is not in the build is left out. NDI, then OMT, then Desktop Capture, as vMix's tabs. */
 class CapturePage : public InputPage {
 public:
 	explicit CapturePage(QWidget *parent) : InputPage(parent)
@@ -83,6 +84,9 @@ public:
 		tabs = new QTabWidget(this);
 		layout->addWidget(tabs);
 
+		if (obs_get_latest_input_type_id(NdiTab::TypeId)) {
+			addTab(new NdiTab(tabs), "Tab.Ndi");
+		}
 		if (obs_get_latest_input_type_id(OmtTab::TypeId)) {
 			addTab(new OmtTab(tabs), "Tab.Omt");
 		}
@@ -200,6 +204,8 @@ InputSelect::InputSelect(obs_source_t *input, QWidget *parent) : QDialog(parent)
 	InputPage *only = nullptr;
 	if (StreamPage::isStream(base)) {
 		only = new StreamPage(base.Get(), pages);
+	} else if (base && std::strcmp(obs_source_get_unversioned_id(base), NdiTab::TypeId) == 0) {
+		only = new NdiTab(base.Get(), pages);
 	} else if (base && std::strcmp(obs_source_get_unversioned_id(base), OmtTab::TypeId) == 0) {
 		only = new OmtTab(base.Get(), pages);
 	} else {

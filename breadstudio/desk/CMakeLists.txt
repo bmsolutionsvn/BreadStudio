@@ -51,12 +51,16 @@ target_sources(
     Meter.hpp
     Mixer.cpp
     Mixer.hpp
+    NdiTab.cpp
+    NdiTab.hpp
     OmtTab.cpp
     OmtTab.hpp
     PropertiesPage.cpp
     PropertiesPage.hpp
     SourceList.cpp
     SourceList.hpp
+    SourceTiles.cpp
+    SourceTiles.hpp
     StreamAddress.cpp
     StreamAddress.hpp
     StreamPage.cpp
