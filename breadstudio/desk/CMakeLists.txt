@@ -112,3 +112,11 @@ set_target_properties(
   bread-outputs-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )
+
+# The ten MultiView boxes, for any frame size: no OBS, no Qt.
+add_executable(bread-multiview-test test/MultiviewLayoutTest.cpp MultiviewLayout.cpp)
+target_include_directories(bread-multiview-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+  bread-multiview-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
