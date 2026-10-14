@@ -59,6 +59,8 @@ target_sources(
     OutputEngine.hpp
     OutputPlan.cpp
     OutputPlan.hpp
+    OutputsWindow.cpp
+    OutputsWindow.hpp
     ProgramSource.cpp
     ProgramSource.hpp
     PropertiesPage.cpp
@@ -67,6 +69,8 @@ target_sources(
     SourceList.hpp
     SourceTiles.cpp
     SourceTiles.hpp
+    SrtDialog.cpp
+    SrtDialog.hpp
     StreamAddress.cpp
     StreamAddress.hpp
     StreamPage.cpp

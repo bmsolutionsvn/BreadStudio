@@ -3,6 +3,7 @@
 #include "InputModel.hpp"
 #include "InputSelect.hpp"
 #include "InputSettings.hpp"
+#include "OutputsWindow.hpp"
 #include "TileDisplay.hpp"
 
 #include <obs-frontend-api.h>
@@ -101,6 +102,20 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 		window->open();
 	});
 	footer->addWidget(add);
+
+	/* the four outputs (outputs spec §3.3); one window at a time */
+	auto *outputs = new QPushButton(text("Outputs"), this);
+	connect(outputs, &QPushButton::clicked, this, [] {
+		for (OutputsWindow *open : settingsParent()->findChildren<OutputsWindow *>()) {
+			open->raise();
+			open->activateWindow();
+			return;
+		}
+		auto *window = new OutputsWindow(settingsParent());
+		window->setAttribute(Qt::WA_DeleteOnClose);
+		window->show();
+	});
+	footer->addWidget(outputs);
 
 	record = new QPushButton(text("Record"), this);
 	connect(record, &QPushButton::clicked, this, [] {
@@ -363,6 +378,7 @@ void InputBar::updateTally()
 
 void InputBar::clear()
 {
+	qDeleteAll(settingsParent()->findChildren<OutputsWindow *>());
 	qDeleteAll(settingsParent()->findChildren<InputSelect *>());
 	qDeleteAll(settingsParent()->findChildren<InputSettings *>());
 	sources.clear();
