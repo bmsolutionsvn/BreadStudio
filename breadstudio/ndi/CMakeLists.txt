@@ -5,7 +5,8 @@ add_library(OBS::bread-ndi ALIAS bread-ndi)
 
 target_sources(bread-ndi PRIVATE Ndi.hpp NdiLoad.hpp ndi.cpp ndi-source.cpp)
 target_include_directories(bread-ndi PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ndi-sdk/include")
-target_link_libraries(bread-ndi PRIVATE OBS::libobs)
+target_include_directories(bread-ndi PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
+target_link_libraries(bread-ndi PRIVATE OBS::libobs OBS::frontend-api)
 
 # NDI's DLL ships beside obs64.exe (spec §7.2), not beside the plugin: OBS loads every DLL in
 # obs-plugins as a plugin. It comes from the NDI SDK on the build machine and is never committed.

@@ -22,6 +22,7 @@
  * tally follows breadstudio/shared/OnAir.hpp instead (network inputs spec §8). */
 
 #include "Ndi.hpp"
+#include "OnAir.hpp"
 
 #include <media-io/video-io.h>
 
@@ -173,6 +174,37 @@ void stop(ndi_source *s)
 	}
 }
 
+/* Runs on the UI thread, where the frontend may be asked. param is a weak reference taken by ndi_tick;
+ * holding the source keeps its data alive. The worker sends the result when it changes. */
+void update_tally(void *param)
+{
+	auto *weak = static_cast<obs_weak_source_t *>(param);
+	obs_source_t *source = obs_weak_source_get_source(weak);
+	obs_weak_source_release(weak);
+	if (!source) {
+		return;
+	}
+
+	const bread::OnAir on = bread::onAir(source);
+	auto *s = static_cast<ndi_source *>(obs_obj_get_data(source));
+	if (s) {
+		s->tally = (on.program ? 1 : 0) | (on.preview ? 2 : 0);
+	}
+	obs_source_release(source);
+}
+
+/* OBS calls this every frame for every source, on screen or not: ten times a second is enough */
+void ndi_tick(void *data, float seconds)
+{
+	auto *s = static_cast<ndi_source *>(data);
+	s->tallyWait += seconds;
+	if (s->tallyWait < 0.1f) {
+		return;
+	}
+	s->tallyWait = 0.0f;
+	obs_queue_task(OBS_TASK_UI, update_tally, obs_source_get_weak_source(s->source), false);
+}
+
 void ndi_update(void *data, obs_data_t *settings)
 {
 	auto *s = static_cast<ndi_source *>(data);
@@ -268,6 +300,7 @@ obs_source_info ndiSourceInfo()
 	info.get_defaults = ndi_defaults;
 	info.get_properties = ndi_properties;
 	info.update = ndi_update;
+	info.video_tick = ndi_tick;
 	info.icon_type = OBS_ICON_TYPE_CAMERA;
 	return info;
 }
