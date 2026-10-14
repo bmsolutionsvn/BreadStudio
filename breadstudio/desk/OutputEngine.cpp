@@ -335,6 +335,7 @@ void OutputEngine::reconcile(const OutputsConfig &next, bool nextLive)
 	}
 	if (!multiview) {
 		multiview = obs_source_create_private(MultiviewSourceId, "BreadStudio MultiView", nullptr);
+		refreshMultiview(multiview); /* gather now: apply() does not call refreshSources() */
 	}
 
 	/* start from the inside out */

@@ -130,7 +130,10 @@ static void covers(int width, int height)
 		CHECK(s.x >= 0 && s.y >= 0);
 		CHECK(s.x + s.w <= width);
 		CHECK(s.y + s.h <= height);
-		CHECK(s.w > 0 && s.h > 0);
+		/* no empty slot; below width 8 an eight-across row cannot give every input a pixel */
+		if (width >= 8 && height >= 2) {
+			CHECK(s.w > 0 && s.h > 0);
+		}
 		area += (long long)s.w * (long long)s.h;
 	}
 	CHECK(area == (long long)width * (long long)height);
@@ -585,6 +588,7 @@ In `reconcile()`, after the block that creates `program`, add its twin:
 ```cpp
 	if (!multiview) {
 		multiview = obs_source_create_private(MultiviewSourceId, "BreadStudio MultiView", nullptr);
+		refreshMultiview(multiview); /* gather now: apply() does not call refreshSources() */
 	}
 ```
 
