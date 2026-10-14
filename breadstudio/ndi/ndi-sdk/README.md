@@ -1,0 +1,6 @@
+# NDI SDK headers
+
+Copied unchanged from the NDI 6 SDK, version 6.3.2, `Include\` (2026-10-14).
+Each file carries its own MIT licence notice. The rest of the SDK, and NDI's
+runtime DLL, are not in git: the build copies the DLL from `%NDI_SDK_DIR%`
+(network inputs spec §7.2). NDI® is a registered trademark of Vizrt NDI AB.
