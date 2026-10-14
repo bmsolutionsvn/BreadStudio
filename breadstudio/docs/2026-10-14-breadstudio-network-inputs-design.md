@@ -174,7 +174,6 @@ The tile then reads one of:
 | `… · alpha` added | The source carries transparency |
 | `checking…` | No answer yet |
 | `no signal` | Connected; no picture within two seconds |
-| `unknown format` | A compressed format BreadStudio does not know |
 
 - The check runs again each time the window opens, because a camera's codec
   can be changed between shows.
@@ -185,8 +184,9 @@ The tile then reads one of:
   tally is not touched.
 
 OMT-HX is the owner's own extension of OMT. A third party's different
-compressed format inside OMT is `unknown format`: it can be added, and stays
-black.
+compressed format inside OMT never reaches BreadStudio: libomt drops a frame in
+a format it does not know. Such a source reads `no signal`; it can be added,
+and stays black.
 
 ### 4.3 After an OMT input is added
 
@@ -282,7 +282,8 @@ settings, as OBS's own settings panel does, and reads two lists from them:
 | List | Each entry |
 |---|---|
 | `address` | Shown name; value: the address to connect to |
-| `detail` (OMT only) | Same order as `address`; shown text: the tile's format line (§4.2) |
+| `detail` (OMT only) | Value: the address it describes; shown text: the tile's format line (§4.2) |
+| `receiving` (OMT, an existing input only) | An info line whose text is what the input receives now (§4.3) |
 
 The window reads them again once a second while a tab is open. A build
 without a plugin has no such type, and so no tab.
@@ -303,9 +304,10 @@ file is edited, and none is added outside `breadstudio/`.
 `omthx` gains one function, about 30 lines, beside the receiver it shares its
 header-reading with:
 
-- `probe(address, timeout)`: connects, asks for the preview stream, reads the
-  first video frame's header and returns the mode, codec, size, frame rate
-  and alpha flag; or "no signal"; or "unknown format".
+- `probe(address, timeout)`: connects, asks for the preview stream and for
+  compressed frames only, so libomt decodes nothing; reads the first video
+  frame's header, which keeps the full size; and returns the mode, codec,
+  size, frame rate and alpha flag, or nothing when no picture came in time.
 
 It has a test beside the existing receiver tests, against the repo's test
 sender in all three formats.
@@ -409,7 +411,7 @@ open in the new window from "Base properties…".
 | SRT: the listener port is in use, or the passphrase is wrong | The tile stays black and the status box shows the input trying again. The reason is in OBS's log. |
 | NDI's DLL is missing or does not load | The NDI tab shows one line saying so. NDI inputs already in the collection are black tiles. Nothing crashes; every other kind works. |
 | No GPU decoder for OMT-HX | Software decoding, and the page says so. |
-| An OMT source's format is unknown | `unknown format` on the tile. It can be added, and stays black. |
+| An OMT source's format is unknown | `no signal` on the tile (§4.2). It can be added, and stays black. |
 | Announcements do not arrive | Add by address for OMT, Also search for NDI (§4.1). |
 | The window is open while a source is probed and the source goes away | The tile goes to `no signal`, then leaves the list. |
 
