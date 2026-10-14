@@ -298,6 +298,9 @@ void registerMultiviewSource();
  * source the engine holds. UI thread only; the engine calls it from refreshSources(). */
 void refreshMultiview(obs_source_t *source);
 
+/* Empty the view: the scene collection it showed is going (the engine's detachSources). */
+void clearMultiview(obs_source_t *source);
+
 } // namespace desk
 ```
 
@@ -324,17 +327,16 @@ static const float Border = 6.0f;
 struct Multiview {
 	obs_source_t *source = nullptr;
 
-	/* gathered on the UI thread by refreshMultiview, read on the graphics thread by the render */
-	OBSSource program;
-	OBSSource preview;
+	/* gathered on the UI thread by publishMultiview, read on the graphics thread by the render */
+	OBSSourceAutoRelease program;
+	OBSSourceAutoRelease preview;
 	std::vector<OBSSource> inputs;
 	bool studio = false;
 
-	/* one private text source per slot, and the text it was last made with */
+	/* one private text source per slot */
 	std::array<OBSSourceAutoRelease, MultiviewSlots> labels;
-	std::array<std::string, MultiviewSlots> shown;
 
-	std::mutex mutex; /* the render and refreshMultiview run on different threads */
+	std::mutex mutex; /* the render and publishMultiview run on different threads */
 };
 
 /* a solid box of one colour, its top-left at (x, y) */
@@ -354,46 +356,36 @@ static void solidBox(float x, float y, float w, float h, uint32_t color)
 	gs_matrix_pop();
 }
 
-/* draws `picture` scaled to fill the box at (x, y) by (w, h), whose own size is `bw` by `bh` */
-static void drawPicture(float x, float y, float w, float h, uint32_t bw, uint32_t bh, obs_source_t *picture)
+/* draws `picture` scaled to fill the box at (x, y) by (w, h), in the source's own coordinates */
+static void drawPicture(float x, float y, float w, float h, obs_source_t *picture)
 {
-	if (!picture || bw == 0 || bh == 0) {
+	if (!picture) {
+		return;
+	}
+	const uint32_t pw = obs_source_get_width(picture);
+	const uint32_t ph = obs_source_get_height(picture);
+	if (pw == 0 || ph == 0) {
 		return;
 	}
 	gs_matrix_push();
 	gs_matrix_translate3f(x, y, 0.0f);
-	gs_matrix_scale3f(w / (float)bw, h / (float)bh, 1.0f);
-	gs_viewport_push();
-	gs_projection_push();
-	gs_set_viewport((int)x, (int)y, (int)w, (int)h);
-	gs_ortho(0.0f, (float)bw, 0.0f, (float)bh, -100.0f, 100.0f);
+	gs_matrix_scale3f(w / (float)pw, h / (float)ph, 1.0f);
 	obs_source_video_render(picture);
-	gs_projection_pop();
-	gs_viewport_pop();
 	gs_matrix_pop();
 }
 
-/* makes or updates the private text source for one slot (UI thread) */
-static void updateLabel(Multiview *mv, int slot, const std::string &wanted, uint32_t height)
+/* one private text source for a slot label (UI thread; may enter the graphics context) */
+static OBSSourceAutoRelease makeLabel(const std::string &text, uint32_t height)
 {
-	if (mv->shown[(size_t)slot] == wanted) {
-		return;
-	}
 	OBSDataAutoRelease settings = obs_data_create();
 	OBSDataAutoRelease font = obs_data_create();
 	obs_data_set_string(font, "face", "Arial");
 	obs_data_set_int(font, "flags", 1); /* bold */
 	obs_data_set_int(font, "size", (int)(height / 18));
 	obs_data_set_obj(settings, "font", font);
-	obs_data_set_string(settings, "text", wanted.c_str());
+	obs_data_set_string(settings, "text", text.c_str());
 	obs_data_set_bool(settings, "outline", false);
-	if (mv->labels[(size_t)slot]) {
-		obs_source_update(mv->labels[(size_t)slot], settings);
-	} else {
-		mv->labels[(size_t)slot] =
-			obs_source_create_private("text_gdiplus", "BreadStudio MultiView label", settings);
-	}
-	mv->shown[(size_t)slot] = wanted;
+	return obs_source_create_private("text_gdiplus", "BreadStudio MultiView label", settings);
 }
 
 static uint32_t multiviewWidth(void *)
@@ -408,28 +400,67 @@ static uint32_t multiviewHeight(void *)
 	return obs_get_video_info(&ovi) ? ovi.base_height : 0;
 }
 
+/* Builds everything the render needs, OFF mv->mutex (creating and destroying sources enters the
+ * graphics context, and holding the lock across that would deadlock the graphics thread), then
+ * publishes it under the lock; the old set is released after the lock, back on this thread. With
+ * `live` false the view is emptied, for a scene collection that is going. */
+static void publishMultiview(Multiview *mv, bool live)
+{
+	const uint32_t height = multiviewHeight(nullptr);
+
+	OBSSourceAutoRelease program;
+	OBSSourceAutoRelease preview;
+	std::vector<OBSSource> nextInputs;
+	std::array<OBSSourceAutoRelease, MultiviewSlots> nextLabels;
+	bool studio = false;
+	if (live) {
+		program = obs_frontend_get_current_scene();
+		preview = obs_frontend_get_current_preview_scene();
+		nextInputs = inputs();
+		studio = obs_frontend_preview_program_mode_active();
+		nextLabels[0] = makeLabel(obs_module_text("Multiview.Preview"), height);
+		nextLabels[1] = makeLabel(obs_module_text("Multiview.Program"), height);
+		for (int i = 0; i < 8; i++) {
+			std::string text;
+			if (i < (int)nextInputs.size()) {
+				text = std::to_string(i + 1) + "  " + obs_source_get_name(nextInputs[(size_t)i].Get());
+			}
+			nextLabels[(size_t)(2 + i)] = makeLabel(text, height);
+		}
+	}
+
+	OBSSourceAutoRelease oldProgram;
+	OBSSourceAutoRelease oldPreview;
+	std::vector<OBSSource> oldInputs;
+	std::array<OBSSourceAutoRelease, MultiviewSlots> oldLabels;
+	{
+		std::lock_guard lock(mv->mutex);
+		oldProgram = std::move(mv->program);
+		oldPreview = std::move(mv->preview);
+		oldInputs.swap(mv->inputs);
+		oldLabels.swap(mv->labels);
+		mv->program = std::move(program);
+		mv->preview = std::move(preview);
+		mv->inputs.swap(nextInputs);
+		mv->studio = studio;
+		mv->labels.swap(nextLabels);
+	}
+	/* oldProgram, oldPreview, oldInputs and oldLabels die here, off the lock */
+}
+
 void refreshMultiview(obs_source_t *source)
 {
 	auto *mv = static_cast<Multiview *>(obs_obj_get_data(source));
-	if (!mv) {
-		return;
+	if (mv) {
+		publishMultiview(mv, true);
 	}
-	const uint32_t height = multiviewHeight(nullptr);
+}
 
-	std::lock_guard lock(mv->mutex);
-	mv->program = obs_frontend_get_current_scene();
-	mv->preview = obs_frontend_get_current_preview_scene();
-	mv->inputs = inputs();
-	mv->studio = obs_frontend_preview_program_mode_active();
-
-	updateLabel(mv, 0, obs_module_text("Multiview.Preview"), height);
-	updateLabel(mv, 1, obs_module_text("Multiview.Program"), height);
-	for (int i = 0; i < 8; i++) {
-		std::string label;
-		if (i < (int)mv->inputs.size()) {
-			label = std::to_string(i + 1) + "  " + obs_source_get_name(mv->inputs[(size_t)i].Get());
-		}
-		updateLabel(mv, 2 + i, label, height);
+void clearMultiview(obs_source_t *source)
+{
+	auto *mv = static_cast<Multiview *>(obs_obj_get_data(source));
+	if (mv) {
+		publishMultiview(mv, false);
 	}
 }
 
@@ -451,8 +482,7 @@ static void multiviewDestroy(void *data)
 }
 
 /* draws one box: its frame, its picture and its label. Called with mv->mutex held. */
-static void drawSlot(Multiview *mv, int slot, const SlotRect &box, obs_source_t *picture, uint32_t frame,
-		     uint32_t width, uint32_t height)
+static void drawSlot(Multiview *mv, int slot, const SlotRect &box, obs_source_t *picture, uint32_t frame)
 {
 	const float innerX = (float)box.x + Border;
 	const float innerY = (float)box.y + Border;
@@ -461,7 +491,7 @@ static void drawSlot(Multiview *mv, int slot, const SlotRect &box, obs_source_t 
 
 	solidBox((float)box.x, (float)box.y, (float)box.w, (float)box.h, frame);
 	solidBox(innerX, innerY, innerW, innerH, 0xFF000000u);
-	drawPicture(innerX, innerY, innerW, innerH, width, height, picture);
+	drawPicture(innerX, innerY, innerW, innerH, picture);
 
 	obs_source_t *label = mv->labels[(size_t)slot];
 	if (!label) {
@@ -498,8 +528,8 @@ static void multiviewRender(void *data, gs_effect_t *)
 
 	/* Preview and Program: the top two boxes, no tally frame (spec §5) */
 	obs_source_t *previewPicture = mv->studio ? preview : program;
-	drawSlot(mv, 0, boxes[0], previewPicture, 0xFF000000u, width, height);
-	drawSlot(mv, 1, boxes[1], program, 0xFF000000u, width, height);
+	drawSlot(mv, 0, boxes[0], previewPicture, 0xFF000000u);
+	drawSlot(mv, 1, boxes[1], program, 0xFF000000u);
 
 	/* the inputs: the bottom eight boxes, framed by the input bar's rule */
 	for (int i = 0; i < 8; i++) {
@@ -511,7 +541,7 @@ static void multiviewRender(void *data, gs_effect_t *)
 		} else if (mv->studio && input && input == preview) {
 			frame = PreviewColor;
 		}
-		drawSlot(mv, 2 + i, boxes[(size_t)(2 + i)], input, frame, width, height);
+		drawSlot(mv, 2 + i, boxes[(size_t)(2 + i)], input, frame);
 	}
 }
 
@@ -563,6 +593,14 @@ In `refreshSources()`, after the loop that calls `show(i)`, add:
 	/* the multiview reads what the desk shows; gather it now, on this thread */
 	if (multiview) {
 		refreshMultiview(multiview);
+	}
+```
+
+In `detachSources()`, after the loop that blanks the outputs, add:
+```cpp
+	/* let go of the scenes of the collection that is going */
+	if (multiview) {
+		clearMultiview(multiview);
 	}
 ```
 
