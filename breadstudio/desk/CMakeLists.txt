@@ -92,3 +92,11 @@ set_target_properties(
   bread-sources-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )
+
+# What the outputs must run, and what a change restarts: no OBS, no Qt.
+add_executable(bread-outputs-test test/OutputPlanTest.cpp OutputPlan.cpp StreamAddress.cpp)
+target_include_directories(bread-outputs-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+  bread-outputs-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
