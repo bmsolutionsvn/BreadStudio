@@ -53,6 +53,9 @@ Start from a first run (no settings folder).
    `scene list 'scenes' was not found` and none about `scenesReordered`.
 2. Tools → Desk layout: the arrangement is applied. The log has no line
    `dock '…' was not found`.
+3. OBS's Controls dock shows no Start Streaming button, and the log has no
+   line `'streamButton' was not found`. An output set to Program shows a
+   fade as a fade (section H, item 2): OBS still draws the main mix first.
 
 ## D. A collection from stock OBS
 
@@ -141,6 +144,29 @@ Tools on a second PC.
    works.
 8. After closing with an NDI input in the collection, the log has
    `Number of memory leaks: 0`.
+
+## H. Outputs, SRT and streaming
+
+Spec: `2026-10-15-breadstudio-outputs-design.md`. Needs `ffplay.exe` with SRT
+and RTMP; the receiver lines are in `2026-10-15-breadstudio-outputs-engine.md`,
+Tasks 4 to 6.
+
+1. Output 1 over SRT, as a caller with the passphrase `a&b=c?d e'f"g`, to an
+   `ffplay` listener: picture and sound within five seconds.
+2. Output 2 set to Program at 1280×720 over SRT shows the same fade as Program,
+   not a cut.
+3. Output 3 set to one input: deleting that input keeps its receiver
+   connected, black; the Outputs window reads "none".
+4. Changing Output 2's source interrupts nothing; changing its size restarts
+   only its own receivers.
+5. Two RTMP destinations on two outputs: the Stream button starts both, a
+   receiver that goes away and comes back is retried, and stopping ends both.
+   OBS's own Start Streaming button is not shown.
+6. Scene Collection → New and back with everything running: every receiver
+   stays connected.
+7. `bread-outputs-test` and `bread-stream-test` pass.
+8. After closing with every output and a destination running, the log has
+   `Number of memory leaks: 0` and no line containing `remaining`.
 
 ## Before a run
 
