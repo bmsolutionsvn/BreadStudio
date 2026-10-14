@@ -28,3 +28,11 @@ else()
 endif()
 
 set_target_properties_obs(bread-ndi PROPERTIES FOLDER plugins/bread-ndi PREFIX "")
+
+# A test sender that prints the tally it gets back. It finds NDI's DLL through NDI's runtime folder.
+add_executable(bread-ndi-send test/NdiSend.cpp)
+target_include_directories(bread-ndi-send PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/ndi-sdk/include")
+set_target_properties(
+  bread-ndi-send
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/ndi/test-bin" FOLDER plugins/bread-ndi
+)
