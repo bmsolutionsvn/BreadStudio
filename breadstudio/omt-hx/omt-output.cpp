@@ -1,0 +1,224 @@
+/* bread_omt_output: an output's picture and sound sent as plain OMT (VMX) or OMT-HX, on omthx's
+ * Sender (outputs spec §4.3). The engine gives it a BGRA canvas and one audio bus, so the picture
+ * needs no conversion. Its receiver count is offered through `get_receivers`. */
+
+#include <obs-module.h>
+
+#include <omthx/omthx.h>
+
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <span>
+#include <string>
+#include <vector>
+
+#include <cstring>
+#include <exception>
+
+namespace {
+
+struct OmtOutput {
+	obs_output_t *output = nullptr;
+	std::string name;
+	omthx::Mode mode = omthx::Mode::Full;
+	omthx::Codec codec = omthx::Codec::Hevc;
+
+	std::shared_ptr<omthx::Sender> sender;
+	std::mutex senderMutex;
+
+	uint32_t width = 0;
+	uint32_t height = 0;
+	int fpsNum = 0;
+	int fpsDen = 1;
+	bool alpha = false;
+	int sampleRate = 0;
+	size_t channels = 0;
+	std::atomic<bool> started = false;
+};
+
+/* create() adds this to the output's proc handler before its definition below */
+void getReceivers(void *data, calldata_t *call);
+
+const char *omtOutputName(void *)
+{
+	return obs_module_text("OmtOutput");
+}
+
+void omtOutputDefaults(obs_data_t *settings)
+{
+	obs_data_set_default_string(settings, "name", "BreadStudio output");
+	obs_data_set_default_string(settings, "mode", "vmx");
+}
+
+void omtOutputUpdate(void *data, obs_data_t *settings)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	o->name = obs_data_get_string(settings, "name");
+	const std::string mode = obs_data_get_string(settings, "mode");
+	/* the engine passes "vmx", "hevc" or "h264"; OMT (VMX) is the default */
+	o->mode = mode == "hevc" || mode == "h264" ? omthx::Mode::Hx : omthx::Mode::Full;
+	o->codec = mode == "h264" ? omthx::Codec::H264 : omthx::Codec::Hevc;
+}
+
+void *omtOutputCreate(obs_data_t *settings, obs_output_t *output)
+{
+	auto *o = new OmtOutput();
+	o->output = output;
+	omtOutputUpdate(o, settings);
+	proc_handler_add(obs_output_get_proc_handler(output), "void get_receivers(out int count)", getReceivers, o);
+	return o;
+}
+
+void omtOutputDestroy(void *data)
+{
+	delete static_cast<OmtOutput *>(data);
+}
+
+bool omtOutputStart(void *data)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	if (o->started) {
+		return false;
+	}
+
+	video_t *video = obs_output_video(o->output);
+	audio_t *audio = obs_output_audio(o->output);
+	uint32_t flags = 0;
+	if (video) {
+		const video_output_info *info = video_output_get_info(video);
+		if (info->format != VIDEO_FORMAT_BGRA) {
+			blog(LOG_WARNING, "[bread-omt] output '%s': the canvas must be BGRA", o->name.c_str());
+			return false;
+		}
+		o->width = info->width;
+		o->height = info->height;
+		o->fpsNum = (int)info->fps_num;
+		o->fpsDen = (int)info->fps_den;
+		o->alpha = true; /* a BGRA canvas is premultiplied, which is what sendVideo is told */
+		flags |= OBS_OUTPUT_VIDEO;
+	}
+	if (audio) {
+		o->sampleRate = audio_output_get_sample_rate(audio);
+		o->channels = audio_output_get_channels(audio);
+		flags |= OBS_OUTPUT_AUDIO;
+	}
+	if (!flags) {
+		return false;
+	}
+
+	std::lock_guard lock(o->senderMutex);
+	try {
+		o->sender = std::make_shared<omthx::Sender>(o->name, o->mode, omthx::Quality::High, o->codec);
+	} catch (const std::exception &error) {
+		blog(LOG_WARNING, "[bread-omt] output '%s': cannot start: %s", o->name.c_str(), error.what());
+		return false;
+	}
+	o->started = obs_output_begin_data_capture(o->output, flags);
+	if (!o->started) {
+		o->sender.reset();
+	}
+	return o->started;
+}
+
+void omtOutputStop(void *data, uint64_t)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	if (!o->started) {
+		return;
+	}
+	o->started = false;
+	obs_output_end_data_capture(o->output);
+
+	std::lock_guard lock(o->senderMutex);
+	o->sender.reset();
+}
+
+void getReceivers(void *data, calldata_t *call)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	std::shared_ptr<omthx::Sender> sender;
+	{
+		std::lock_guard lock(o->senderMutex);
+		sender = o->sender;
+	}
+	int count = 0;
+	if (sender) {
+		count = sender->stats().connections;
+	}
+	calldata_set_int(call, "count", count);
+}
+
+void omtOutputRawVideo(void *data, video_data *frame)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	if (!o->started || o->width == 0 || o->height == 0) {
+		return;
+	}
+
+	std::shared_ptr<omthx::Sender> sender;
+	{
+		std::lock_guard lock(o->senderMutex);
+		sender = o->sender;
+	}
+	if (!sender) {
+		return;
+	}
+
+	omthx::VideoFormat format;
+	format.width = (int)o->width;
+	format.height = (int)o->height;
+	format.fpsN = o->fpsNum;
+	format.fpsD = o->fpsDen;
+	format.alpha = o->alpha;
+
+	const size_t size = (size_t)o->width * o->height * 4;
+	const std::span<const uint8_t> bgra(frame->data[0], size);
+	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
+	const int64_t timestamp = (int64_t)frame->timestamp / 100;
+	sender->sendVideo(format, bgra, o->alpha, timestamp);
+}
+
+void omtOutputRawAudio(void *data, audio_data *frame)
+{
+	auto *o = static_cast<OmtOutput *>(data);
+	if (!o->started || o->sampleRate == 0 || o->channels == 0) {
+		return;
+	}
+
+	std::shared_ptr<omthx::Sender> sender;
+	{
+		std::lock_guard lock(o->senderMutex);
+		sender = o->sender;
+	}
+	if (!sender) {
+		return;
+	}
+
+	/* OBS gives one plane per channel; the loop assembles them one channel after another, as omthx wants */
+	std::vector<float> planar((size_t)frame->frames * o->channels);
+	for (size_t c = 0; c < o->channels; c++) {
+		std::memcpy(planar.data() + c * (size_t)frame->frames, frame->data[c],
+			    (size_t)frame->frames * sizeof(float));
+	}
+	sender->sendAudio(planar, o->sampleRate, (int)o->channels, (int64_t)frame->timestamp / 100);
+}
+
+} // namespace
+
+obs_output_info omtOutputInfo()
+{
+	obs_output_info info = {};
+	info.id = "bread_omt_output";
+	info.flags = OBS_OUTPUT_AV;
+	info.get_name = omtOutputName;
+	info.get_defaults = omtOutputDefaults;
+	info.create = omtOutputCreate;
+	info.start = omtOutputStart;
+	info.stop = omtOutputStop;
+	info.update = omtOutputUpdate;
+	info.destroy = omtOutputDestroy;
+	info.raw_video = omtOutputRawVideo;
+	info.raw_audio = omtOutputRawAudio;
+	return info;
+}

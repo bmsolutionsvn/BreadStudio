@@ -16,6 +16,7 @@
 #include "Catalog.hpp"
 #include "Describe.hpp"
 #include "OnAir.hpp"
+#include "omt-output.hpp"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("omt-hx", "en-US")
@@ -262,6 +263,8 @@ static const obs_source_info omt_hx_source = {
 bool obs_module_load(void)
 {
 	obs_register_source(&omt_hx_source);
+	const obs_output_info output = omtOutputInfo();
+	obs_register_output(&output);
 	/* discovery needs a second or two: start it now, so the list is full when it is first shown */
 	omthx::discover();
 	return true;

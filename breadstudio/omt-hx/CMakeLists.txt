@@ -22,6 +22,8 @@ target_sources(
   omt-hx
   PRIVATE
     omt-hx.cpp
+    omt-output.cpp
+    omt-output.hpp
     Catalog.cpp
     Catalog.hpp
     Describe.cpp
