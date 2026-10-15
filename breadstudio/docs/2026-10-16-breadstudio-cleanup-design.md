@@ -45,7 +45,7 @@ underneath that stays mergeable.
 | K7 | How hiding is done | One table of `{object name, what it is}` in a new desk unit. Applied once at `FINISHED_LOADING`, after `DeskLayout` and the ☰ menu, and again after a scene collection loads (a collection loads plugin docks). |
 | K8 | A miss is not fatal | A name that is not found is logged and skipped; the rest still hides. This is S1 §6.2's rule, for the same reason: the names are OBS internals. |
 | K9 | No new settings | There is no option to show the hidden surface again. BreadStudio is the desk; the OBS surface is not a mode. |
-| K10 | The desk's docks | The desk's own docks — the input bar and the Mixer — are **movable and floatable but not closable**: the operator can detach one and park it on a second monitor, as in vMix, but cannot close it and lose it. With OBS's docks gone (K6) the only docks that exist are the desk's, so there is nothing left to close and no way to end up with an empty dock area. |
+| K10 | The desk's docks | The desk's docks — the input bar and the Mixer — and OBS's **Scene Transitions** dock, which is the desk's transition control, are **movable and floatable but not closable**: the operator can detach one and park it on a second monitor, as in vMix, but cannot close it and lose it. With OBS's other docks gone (K6) there is nothing else to close and no way to end up with an empty dock area. |
 
 ### 2.2 The Project
 
@@ -249,9 +249,12 @@ the list:
 | Dock | `scenesDock` | OBS's Scenes list |
 | Dock | `sourcesDock` | OBS's Sources list |
 | Dock | `mixerDock` | OBS's Audio Mixer (the desk Mixer replaces it) |
-| Dock | `transitionsDock` | OBS's Scene Transitions |
-| Dock | `controlsDock` | OBS's Controls |
+| Dock | `controlsDock` | OBS's Controls — Studio Mode, recording, virtual cam, settings |
 | Dock | `statsDock` | OBS's Stats |
+
+`transitionsDock` is **not** in this list: OBS's Scene Transitions dock is the
+desk's own transition control — the layout places it beside the mixer and the
+transition and its duration are chosen there (S1 §4.1). It stays.
 | Menu item | `actionShow_Recordings`, `actionRemux`, `actionShowSettingsFolder`, `actionShowProfileFolder` | the File entries that stay outside the desk's job |
 
 Anything a **plugin** adds (a dock, a Tools entry) is hidden too, unless it is
