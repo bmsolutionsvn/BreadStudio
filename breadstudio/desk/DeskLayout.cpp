@@ -6,7 +6,9 @@
 
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QMenuBar>
 #include <QPushButton>
+#include <QToolBar>
 
 namespace desk {
 
@@ -40,22 +42,36 @@ bool applyLayout()
 
 	obs_frontend_set_preview_program_mode(true);
 
+	/* OBS's menu bar and its Scenes and Sources toolbars are OBS chrome the desk does not
+	 * use; hide them wherever their object names are found */
+	main->menuBar()->setVisible(false);
+	for (const char *name : {"scenesToolbar", "sourcesToolbar"}) {
+		auto *toolbar = main->findChild<QToolBar *>(name);
+		if (!toolbar) {
+			blog(LOG_WARNING, "[bread-desk] toolbar '%s' was not found; it stays", name);
+			continue;
+		}
+		toolbar->setVisible(false);
+	}
+
 	scenes->setVisible(false);
 	sources->setVisible(false);
 	obsMixer->setVisible(false);
+	/* OBS's Controls dock carries Studio Mode, Recording, Virtual Cam and Settings; the
+	 * desk replaces all of it, so it is hidden, not laid out */
+	controls->setVisible(false);
 
-	for (QDockWidget *dock : {inputs, mixer, transitions, controls}) {
+	/* as vMix: the input bar on the left, the mixer docked to its right, then OBS's Scene
+	 * Transitions (the transition and its duration are chosen there) */
+	for (QDockWidget *dock : {inputs, mixer, transitions}) {
 		dock->setFloating(false);
 		main->addDockWidget(Qt::BottomDockWidgetArea, dock);
 		dock->setVisible(true);
 	}
 
-	/* as vMix: the input bar on the left, the mixer docked to its right, then OBS's Scene
-	 * Transitions (the transition and its duration are chosen there) and Controls */
 	main->splitDockWidget(inputs, mixer, Qt::Horizontal);
 	main->splitDockWidget(mixer, transitions, Qt::Horizontal);
-	main->splitDockWidget(transitions, controls, Qt::Horizontal);
-	main->resizeDocks({inputs, mixer, transitions, controls}, {900, 420, 160, 160}, Qt::Horizontal);
+	main->resizeDocks({inputs, mixer, transitions}, {900, 420, 160}, Qt::Horizontal);
 	main->resizeDocks({inputs}, {320}, Qt::Vertical);
 
 	return true;
