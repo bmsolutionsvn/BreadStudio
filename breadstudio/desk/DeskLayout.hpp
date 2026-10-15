@@ -7,7 +7,7 @@ namespace desk {
 /* returns false when a dock the layout needs was not found (nothing is changed then) */
 bool applyLayout();
 
-/* applyLayout, the first time the program runs with the desk */
+/* applyLayout when the desk's layout version is newer than the one stored in the config */
 void applyLayoutOnFirstRun();
 
 /* OBS's own Start Streaming button: the desk's Stream button runs the RTMP destinations instead

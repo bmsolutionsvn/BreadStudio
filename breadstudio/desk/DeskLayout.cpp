@@ -12,6 +12,10 @@
 
 namespace desk {
 
+/* Bump when a change to applyLayout() must reach installs that already ran it: an install
+ * whose stored version is below this applies the layout again once. */
+constexpr int LayoutVersion = 2;
+
 bool applyLayout()
 {
 	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -80,12 +84,12 @@ bool applyLayout()
 void applyLayoutOnFirstRun()
 {
 	config_t *config = obs_frontend_get_user_config();
-	if (config_get_bool(config, "BreadDesk", "LayoutApplied")) {
+	if (config_get_int(config, "BreadDesk", "LayoutVersion") >= LayoutVersion) {
 		return;
 	}
 
 	if (applyLayout()) {
-		config_set_bool(config, "BreadDesk", "LayoutApplied", true);
+		config_set_int(config, "BreadDesk", "LayoutVersion", LayoutVersion);
 		config_save_safe(config, "tmp", nullptr);
 	}
 }
