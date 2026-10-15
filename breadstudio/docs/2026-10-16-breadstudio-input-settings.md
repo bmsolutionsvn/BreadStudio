@@ -20,7 +20,7 @@ Checked on 2026-10-16 against OBS 32.2.2 on `main`:
 |---|---|
 | OBS ships a reusable properties panel, `OBSPropertiesView` (`shared/properties-view/`); the Input Select window already hosts it to show a source's settings before it exists. | A filter page or the Advanced page is that widget for the filter/base, not new controls — the page is small. |
 | The desk's AFV is `AudioBed::afv`/`setAfv`; the mixer strip and the tile already toggle it. | "Automatically mix audio" is the AFV toggle; the General page sets the same private key. |
-| The desk renames through `renameInput()` (refuses a taken name); the base's settings go through `obs_source_update`. | The General page's Name and Aspect Ratio reuse them. |
+| The desk renames through `renameInput()` (refuses a taken name); the base's settings go through `obs_source_update`. | The General page's Name reuses the former; Deinterlacing and Restart with transition reuse the latter. |
 | `TileDisplay` draws each tile's header colour and `MultiviewSource` each slot's frame from `Desk.hpp`'s `ProgramColor`/`PreviewColor`/`IdleColor`. | The category tint is one more colour input to those two draws. |
 | `InputBar`'s tile click always calls `toPreview`. | The mouse-click action is a read of a private key at that one call site. |
 
@@ -65,7 +65,7 @@ Checked on 2026-10-16 against OBS 32.2.2 on `main`:
 **Interfaces:**
 - Produces:
   - `InputSettings` keeps `InputSettings(obs_source_t*, QWidget*)`, `input()`, `reload()`.
-  - In `InputPages.hpp`: `struct InputPage { QString title; QWidget *widget; };` and `std::vector<InputPage> pagesFor(obs_source_t *input, InputSettings *window);` returning the pages §3.1 lists **for that input**, in order. Each builder may return `nullptr` when the input's type does not back it.
+  - In `InputPages.hpp`: `struct InputSettingPage { QString title; QWidget *widget; };` and `std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *window);` returning the pages §3.1 lists **for that input**, in order. Each builder may return `nullptr` when the input's type does not back it. The struct is named `InputSettingPage`, not `InputPage`, so it does not clash with the existing `class InputPage` in `InputPage.hpp` (both in `namespace desk`).
 
 - [ ] **Step 1: The page-list helper**
 
@@ -88,14 +88,14 @@ namespace desk {
 class InputSettings;
 
 /* one page of the Input Settings window */
-struct InputPage {
+struct InputSettingPage {
 	QString title;
 	QWidget *widget = nullptr; /* owned by the window's stack */
 };
 
 /* The pages an input gets, in order (inputs spec §3.1). A page whose backing is absent is
  * left out. `window` is the shell, for the pages that must close or reload it. */
-std::vector<InputPage> pagesFor(obs_source_t *input, InputSettings *window);
+std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *window);
 
 /* the General page's helpers, also used by Copy From… */
 std::string categoryOf(obs_source_t *input);
@@ -106,11 +106,13 @@ void setCategory(obs_source_t *input, const std::string &colour);
 
 - [ ] **Step 2: The General page**
 
-In `InputPages.cpp`, build the General page: a `QFormLayout` with Name (`QLineEdit`, on `editingFinished` calls `renameInput`), Aspect Ratio and Deinterlacing (a combo each, only if the base's settings expose the key), Category (a row of colour swatch buttons), the four automatic-behaviour checkboxes (`Automatically mix audio` = AFV; the other three where the base has the matching flag), Mouse Click Action (`QComboBox`: None/Preview/Program), read-only Resolution and Frame Rate labels, and an `Audio Settings…` button that opens OBS's Advanced Audio for the base.
+In `InputPages.cpp`, build the General page: a `QFormLayout` with Name (`QLineEdit`, on `editingFinished` calls `renameInput`), Deinterlacing, Category (a row of colour swatch buttons), `Automatically mix audio` (= AFV) and, where the base backs it, `Restart with transition`, Mouse Click Action (`QComboBox`: None/Preview/Program), read-only Resolution and Frame Rate labels, and an `Audio Settings…` button that opens OBS's Advanced Audio for the base.
 
-Read the base's settings with `obs_source_get_properties(base)` + `obs_properties_get` to decide which of Aspect Ratio/Deinterlacing exists — do not invent a key.
+Aspect Ratio is not an OBS source property, so no such control is shown — do not invent a key. Deinterlacing is a source-level setting, not a property: list the combo only when the base is an async-video source (`obs_source_get_output_flags(base) & OBS_SOURCE_ASYNC_VIDEO`), take the options from the `OBS_DEINTERLACE_MODE_*` enum, the current value from `obs_source_get_deinterlace_mode(base)`, and write a change with `obs_source_set_deinterlace_mode(base, mode)`.
 
-Add the locale keys the page needs (`Settings.Title`, `Settings.Page.General`, `Settings.Name`, `Settings.Aspect`, `Settings.Category`, `Settings.Afv`, `Settings.Click`, `Settings.Click.None/Preview/Program`, `Settings.Resolution`, `Settings.FrameRate`, `Settings.AudioSettings`, `Settings.CopyFrom`, `Settings.Close`) to `breadstudio/desk/data/locale/en-US.ini`.
+`Restart with transition` is the base's own `restart_on_activate` bool property, which the media and slideshow sources have: show the checkbox only when `obs_source_properties(base)` + `obs_properties_get` find it, read it from the base's settings, and write it back with `obs_source_update`. Play and Pause with transition are the input's scene-item behaviour, not a source setting, so they are not shown.
+
+Add the locale keys the page needs (`Settings.Title`, `Settings.Page.General`, `Settings.Name`, `Settings.Deinterlacing` and its `Settings.Deinterlacing.<Mode>` names, `Settings.Category`, `Settings.Afv`, `Settings.Restart`, `Settings.Click`, `Settings.Click.None/Preview/Program`, `Settings.Resolution`, `Settings.FrameRate`, `Settings.AudioSettings`, `Settings.CopyFrom`, `Settings.Close`) to `breadstudio/desk/data/locale/en-US.ini`.
 
 The other page titles (`Settings.Page.Position`, `…ColourAdjust`, `…ColourKey`, `…ColourCorrection`, `…Effects`, `…Layers`, `…Triggers`, `…Advanced`) are added now too, and `pagesFor` returns just General for this task — the rest arrive in Tasks 3 and 4.
 
