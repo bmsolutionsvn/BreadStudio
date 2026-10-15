@@ -10,7 +10,7 @@ Start from a first run (no settings folder).
 
 1. With Add Input alone, make: camera 1, camera 2, the media file, a Blank with
    both cameras as layers placed side by side, and the microphone.
-2. Open View → Multiview on the second monitor. Cut and fade between the four
+2. Open Projector → Multiview on the second monitor. Cut and fade between the four
    picture inputs for two minutes. On the bar and on the multiview, the red
    frame is always what is on Program and the green one what is on Preview.
 3. The microphone is heard whatever is on Program. A camera's audio is heard
@@ -51,11 +51,13 @@ Start from a first run (no settings folder).
 1. Drag a tile to a new place: it moves, the numbers follow, and the
    multiview follows. The log has no line
    `scene list 'scenes' was not found` and none about `scenesReordered`.
-2. Tools → Desk layout: the arrangement is applied. The log has no line
-   `dock '…' was not found`.
-3. OBS's Controls dock shows no Start Streaming button, and the log has no
-   line `'streamButton' was not found`. An output set to Program shows a
-   fade as a fade (section H, item 2): OBS still draws the main mix first.
+2. The desk layout is applied automatically once per `LayoutVersion` (stored
+   under `BreadDesk` in the user config); it is not reachable by hand. The log
+   has no line `dock '…' was not found`.
+3. No Start Streaming button is visible anywhere in the window (the desk's own
+   Stream button is the one that should be there), and the log has no line
+   `'streamButton' was not found`. An output set to Program shows a fade as a
+   fade (section H, item 2): OBS still draws the main mix first.
 
 ## D. A collection from stock OBS
 
@@ -209,6 +211,33 @@ shown — OBS has no such source property.
 6. `Copy From…` copies the desk settings (AFV, category, mouse-click action, the
    automatic behaviours) from another input.
 7. A base whose type has no deinterlacing control shows none.
+
+## J. OBS's surface is hidden
+
+Run after every upstream merge: these are object-name lookups into OBS's window,
+and an upstream rename breaks them silently.
+
+1. The ☰ menu holds **File** (Settings…, Exit), **Profile**, **Scene Collection**
+   and **Projector**, and nothing else. No Edit, View, Docks, Tools or Help.
+2. OBS's own menu bar is not visible anywhere, and its Scenes and Sources
+   toolbars are gone.
+3. File holds no Show Recordings, Remux, Show Settings Folder or Show Profile
+   Folder.
+4. Projector → Multiview opens a Multiview projector window, and the monitor
+   list it offers is the one from launch — a monitor plugged in after
+   BreadStudio started is not offered until it restarts (the View menu it used
+   to refresh from is gone).
+5. No OBS dock or plug-in dock is visible — Scenes, Sources, Audio Mixer,
+   Controls and Stats included — and the Docks menu does not exist to bring
+   them back.
+6. The desk's input bar and Mixer docks are visible, and OBS's Scene Transitions
+   dock is visible beside them.
+7. A desk dock can be dragged out to float on a second monitor, and has no close
+   button; Scene Transitions has none either.
+8. Settings… opens and every page of it works.
+9. An input's properties and its filters open from the desk.
+10. A search for `was not found` in the newest log under
+    `%APPDATA%\obs-studio\logs` finds nothing.
 
 ## Before a run
 
