@@ -347,7 +347,11 @@ void OutputEngine::reconcile(const OutputsConfig &next, bool nextLive)
 			/* inputs are laid out for the main mix's base size; the output size scales it */
 			canvasInfo.output_width = (uint32_t)run.width;
 			canvasInfo.output_height = (uint32_t)run.height;
-			canvasInfo.output_format = run.alpha ? VIDEO_FORMAT_BGRA : VIDEO_FORMAT_NV12;
+			/* omthx's Sender takes BGRA, so an output that sends OMT needs a BGRA canvas too
+			 * (outputs spec §4.3); the OMT output refuses any other format */
+			const OmtMode omt = wanted.outputs[(size_t)i].omt;
+			canvasInfo.output_format = (run.alpha || omt != OmtMode::Off) ? VIDEO_FORMAT_BGRA
+										      : VIDEO_FORMAT_NV12;
 			const std::string name = senderName(i);
 			r.canvas = obs_canvas_create_private(name.c_str(), &canvasInfo, ACTIVATE | EPHEMERAL);
 			if (!r.canvas) {

@@ -4,6 +4,9 @@
 #include "OutputEngine.hpp"
 #include "SrtDialog.hpp"
 
+#include <callback/calldata.h>
+#include <callback/proc.h>
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -38,6 +41,20 @@ static QString sourceKey(const OutputConfig &config)
 		break;
 	}
 	return "input:" + QString::fromStdString(config.input);
+}
+
+/* the NDI plugin says why NDI is off, when it is loaded at all; empty otherwise */
+static QString ndiReason()
+{
+	calldata_t data;
+	calldata_init(&data);
+	QString reason;
+	if (proc_handler_call(obs_get_proc_handler(), "bread_ndi_status", &data)) {
+		const char *value = calldata_string(&data, "status");
+		reason = QString::fromUtf8(value ? value : "");
+	}
+	calldata_free(&data);
+	return reason;
 }
 
 static QString stateText(const SenderStatus &status, bool listener)
@@ -94,16 +111,16 @@ OutputsWindow::OutputsWindow(QWidget *parent) : QDialog(parent)
 		grid->addWidget(row.status, i + 1, 11);
 	}
 
-	/* a column whose plugin is not in this build says why */
-	auto missing = [this](const char *type, int column, QGridLayout *g) {
+	/* a column whose plugin is not in this build says why; the NDI plugin's own reason wins */
+	auto missing = [this](const char *type, int column, QGridLayout *g, const QString &reason) {
 		if (!OutputEngine::hasOutputType(type)) {
-			auto *note = new QLabel(text("Outputs.Missing"), this);
+			auto *note = new QLabel(reason.isEmpty() ? text("Outputs.Missing") : reason, this);
 			g->addWidget(note, OutputCount + 1, column);
 		}
 	};
-	missing(NdiType, 5, grid);
-	missing(OmtType, 6, grid);
-	missing(SrtType, 7, grid);
+	missing(NdiType, 5, grid, ndiReason());
+	missing(OmtType, 6, grid, QString());
+	missing(SrtType, 7, grid, QString());
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 	connect(buttons, &QDialogButtonBox::accepted, this, &OutputsWindow::accept);

@@ -69,6 +69,12 @@ void setExtraIps(void *, calldata_t *data)
 	finder = nullptr;
 }
 
+/* why NDI is off, for the Outputs window's greyed NDI column */
+void getNdiStatus(void *, calldata_t *data)
+{
+	calldata_set_string(data, "status", status.c_str());
+}
+
 } // namespace
 
 const std::string &ndiStatus()
@@ -139,6 +145,7 @@ bool obs_module_load(void)
 	proc_handler_t *procs = obs_get_proc_handler();
 	proc_handler_add(procs, "void bread_ndi_get_extra_ips(out string ips)", getExtraIps, nullptr);
 	proc_handler_add(procs, "void bread_ndi_set_extra_ips(in string ips)", setExtraIps, nullptr);
+	proc_handler_add(procs, "void bread_ndi_status(out string status)", getNdiStatus, nullptr);
 	/* the finder needs a second or two: start it now, so the list is full when it is first shown */
 	ndiSources();
 	return true;
