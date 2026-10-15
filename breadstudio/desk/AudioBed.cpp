@@ -1,9 +1,11 @@
 #include "AudioBed.hpp"
 #include "InputModel.hpp"
+#include "MultiviewSource.hpp"
 
 #include <obs-frontend-api.h>
 #include <graphics/vec2.h>
 
+#include <cstring>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -104,18 +106,45 @@ void AudioBed::clear()
 	channel = 0;
 }
 
+/* true if `program` is a scene showing the desk's own MultiView, so every input it monitors is
+ * on air (and so their audio is heard, with AFV on) */
+static bool programShowsMultiview(obs_source_t *program)
+{
+	obs_scene_t *scene = program ? obs_scene_from_source(program) : nullptr;
+	if (!scene) {
+		return false;
+	}
+
+	bool found = false;
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			obs_source_t *source = obs_sceneitem_get_source(item);
+			if (source && strcmp(obs_source_get_id(source), MultiviewSourceId) == 0) {
+				*static_cast<bool *>(param) = true;
+				return false;
+			}
+			return true;
+		},
+		&found);
+	return found;
+}
+
 void AudioBed::sync()
 {
 	/* drive each base's mute from AFV and Program: heard only if the input's own switch is
 	 * on and, when AFV is on, the input is on Program. This runs even with no bed: the bed
 	 * needs a free output channel, AFV does not. */
 	OBSSourceAutoRelease program = obs_frontend_get_current_scene();
+	/* vMix's rule: an input is on Program when it is the Program scene, or when the Program
+	 * scene is showing the desk's own MultiView, which puts every input it monitors on air. */
+	const bool multiviewOnProgram = programShowsMultiview(program);
 	for (OBSSource &input : inputs()) {
 		OBSSource base = baseSource(input);
 		if (!base) {
 			continue;
 		}
-		const bool onProgram = program && input.Get() == program.Get();
+		const bool onProgram = program && (input.Get() == program.Get() || multiviewOnProgram);
 		obs_source_set_muted(base, !audioOn(input) || (afv(input) && !onProgram));
 	}
 

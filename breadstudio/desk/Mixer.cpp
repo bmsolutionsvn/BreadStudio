@@ -62,10 +62,8 @@ struct Mixer::Strip {
 	std::atomic<float> peakDb{Silent};
 	OBSSignal muteSignal;
 	QWidget *widget = nullptr;
-	QLabel *name = nullptr;
 	Meter *meter = nullptr;
 	QToolButton *audio = nullptr;
-	bool dimmed = false;
 
 	~Strip()
 	{
@@ -146,9 +144,9 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	column->setContentsMargins(2, 2, 2, 2);
 	column->setSpacing(2);
 
-	strip->name = new QLabel(title, strip->widget);
-	strip->name->setToolTip(title);
-	column->addWidget(strip->name);
+	auto *name = new QLabel(title, strip->widget);
+	name->setToolTip(title);
+	column->addWidget(name);
 
 	/* level and fader */
 	auto *levels = new QHBoxLayout();
@@ -280,18 +278,7 @@ void Mixer::syncMute()
 void Mixer::tick()
 {
 	for (auto &strip : strips) {
-		const bool muted = obs_source_muted(strip->source);
-		strip->meter->setDb(muted ? Silent : strip->peakDb.exchange(Silent));
-		if (muted) {
-			strip->peakDb.store(Silent);
-		}
-
-		/* OBS's volmeter keeps showing a level for a user-muted source; a silenced input
-		 * reads silent and its strip is greyed, as vMix. Only restyle on the change. */
-		if (muted != strip->dimmed) {
-			strip->dimmed = muted;
-			strip->name->setStyleSheet(muted ? QStringLiteral("color: gray;") : QString());
-		}
+		strip->meter->setDb(strip->peakDb.exchange(Silent));
 	}
 
 	for (size_t bus = 0; bus < MAX_AUDIO_MIXES; bus++) {
