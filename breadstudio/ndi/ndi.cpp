@@ -128,6 +128,12 @@ bool obs_module_load(void)
 	const obs_source_info info = ndiSourceInfo();
 	obs_register_source(&info);
 
+	/* the output only exists while NDI is on, so the Outputs window greys the NDI column otherwise */
+	if (ndiLib) {
+		const obs_output_info output = ndiOutputInfo();
+		obs_register_output(&output);
+	}
+
 	loadExtraIps();
 	/* the desk sets "Also search" through these, so it needs nothing of NDI (spec §6.1) */
 	proc_handler_t *procs = obs_get_proc_handler();

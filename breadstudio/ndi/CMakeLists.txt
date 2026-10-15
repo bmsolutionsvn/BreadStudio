@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.28...3.30)
 add_library(bread-ndi MODULE)
 add_library(OBS::bread-ndi ALIAS bread-ndi)
 
-target_sources(bread-ndi PRIVATE Ndi.hpp NdiLoad.hpp ndi.cpp ndi-source.cpp)
+target_sources(bread-ndi PRIVATE Ndi.hpp NdiLoad.hpp ndi.cpp ndi-source.cpp ndi-output.cpp)
 target_include_directories(bread-ndi PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ndi-sdk/include")
 target_include_directories(bread-ndi PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
 target_link_libraries(bread-ndi PRIVATE OBS::libobs OBS::frontend-api)

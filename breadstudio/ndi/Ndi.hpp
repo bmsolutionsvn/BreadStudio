@@ -18,3 +18,6 @@ std::vector<std::string> ndiSources();
 
 /* the source type, filled in ndi-source.cpp */
 obs_source_info ndiSourceInfo();
+
+/* the output type, filled in ndi-output.cpp */
+obs_output_info ndiOutputInfo();
