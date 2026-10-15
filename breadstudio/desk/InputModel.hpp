@@ -107,10 +107,6 @@ struct Layer {
 /* every item above the base, top first */
 std::vector<Layer> layers(obs_source_t *input);
 
-/* puts `layerInput` on top of `host` at half size, centred. False when that would make
- * an input contain itself; nothing is added then. */
-bool addLayer(obs_source_t *host, obs_source_t *layerInput);
-
 void removeLayer(obs_source_t *host, int64_t id);
 void moveLayer(obs_source_t *host, int64_t id, bool up); /* never below the base */
 void setLayerVisible(obs_source_t *host, int64_t id, bool visible);

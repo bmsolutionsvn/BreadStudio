@@ -297,6 +297,12 @@ void onTransitionStopped()
 static obs_source_t *runningTrigger = nullptr;
 static TriggerWhen runningTriggerWhen = TriggerWhen::Program;
 
+/* a chain can still walk input to input (e.g. Program sends to Preview, Preview's trigger runs),
+ * so a small budget stops a long or endless chain; the per-(input, when) guard above stops the
+ * one-step self re-entry */
+static const int MaxTriggerDepth = 3;
+static int runningTriggerDepth = 0;
+
 static void runTrigger(obs_source_t *input, TriggerAction action)
 {
 	switch (action) {
@@ -336,14 +342,19 @@ void runTriggers(obs_source_t *input, TriggerWhen when)
 	if (action == TriggerAction::Nothing || (runningTrigger == input && runningTriggerWhen == when)) {
 		return;
 	}
+	if (runningTriggerDepth >= MaxTriggerDepth) {
+		return;
+	}
 
 	obs_source_t *savedInput = runningTrigger;
 	const TriggerWhen savedWhen = runningTriggerWhen;
 	runningTrigger = input;
 	runningTriggerWhen = when;
+	runningTriggerDepth++;
 
 	runTrigger(input, action);
 
+	runningTriggerDepth--;
 	runningTrigger = savedInput;
 	runningTriggerWhen = savedWhen;
 }
@@ -354,6 +365,7 @@ void clearModel()
 	restoreTransition = nullptr;
 	restorePreview = nullptr;
 	runningTrigger = nullptr;
+	runningTriggerDepth = 0;
 }
 
 static std::string uuidOf(obs_source_t *source)
@@ -577,27 +589,6 @@ std::vector<Layer> layers(obs_source_t *input)
 	}
 	std::reverse(all.begin(), all.end());
 	return all;
-}
-
-bool addLayer(obs_source_t *host, obs_source_t *layerInput)
-{
-	if (wouldLoop(graph(), uuidOf(host), uuidOf(layerInput))) {
-		return false;
-	}
-
-	obs_sceneitem_t *item = obs_scene_add(obs_scene_from_source(host), layerInput);
-
-	/* half size in the middle, so the base still shows and the layer is easy to grab */
-	obs_video_info ovi = {};
-	obs_get_video_info(&ovi);
-	struct vec2 scale;
-	vec2_set(&scale, 0.5f, 0.5f);
-	obs_sceneitem_set_scale(item, &scale);
-	struct vec2 pos;
-	vec2_set(&pos, (float)ovi.base_width / 4.0f, (float)ovi.base_height / 4.0f);
-	obs_sceneitem_set_pos(item, &pos);
-
-	return true;
 }
 
 static obs_sceneitem_t *findLayer(obs_source_t *host, int64_t id)

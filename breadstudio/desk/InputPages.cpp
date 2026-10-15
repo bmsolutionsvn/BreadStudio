@@ -216,8 +216,9 @@ QWidget *makeGeneral(obs_source_t *input)
 	form->addRow(text("Settings.Resolution"), new QLabel(resolutionText(base), page));
 	form->addRow(text("Settings.FrameRate"), new QLabel(frameRateText(), page));
 
-	/* OBS's own panel for the base: its Advanced Audio is not reachable from a plugin */
-	auto *audio = new QPushButton(text("Settings.AudioSettings"), page);
+	/* OBS's own source-properties panel for the base: its Advanced Audio is not reachable from a
+	 * plugin, so the button opens the base's own properties, and says so */
+	auto *audio = new QPushButton(text("Settings.SourceProperties"), page);
 	QObject::connect(audio, &QPushButton::clicked, page, [base] { obs_frontend_open_source_properties(base); });
 	outer->addWidget(audio);
 
@@ -268,6 +269,17 @@ void addCrop(QFormLayout *form, const QString &label, int value, QWidget *parent
 	form->addRow(label, spin);
 }
 
+/* The base is created bounded (OBS_BOUNDS_SCALE_INNER), and OBS renders from the bounds and
+ * ignores the scale while a bound is set, so a scale change does nothing until the bound is
+ * cleared; clear it only when there is one, so nothing is disturbed needlessly. */
+void scalePastBounds(OBSSceneItem item, const struct vec2 &scale)
+{
+	if (obs_sceneitem_get_bounds_type(item) != OBS_BOUNDS_NONE) {
+		obs_sceneitem_set_bounds_type(item, OBS_BOUNDS_NONE);
+	}
+	obs_sceneitem_set_scale(item, &scale);
+}
+
 /* Position is the base's own scene item — the transform OBS's own window edits (spec §3.1). Only
  * the bottom item, the base, is read and written, so the input's layers are left alone. */
 QWidget *makePosition(obs_source_t *input)
@@ -303,13 +315,13 @@ QWidget *makePosition(obs_source_t *input)
 		struct vec2 now;
 		obs_sceneitem_get_scale(item, &now);
 		now.x = (float)v;
-		obs_sceneitem_set_scale(item, &now);
+		scalePastBounds(item, now);
 	});
 	addSpin(form, text("Settings.Position.ScaleY"), scale.y, -10000.0, 10000.0, 0.1, 3, page, [item](double v) {
 		struct vec2 now;
 		obs_sceneitem_get_scale(item, &now);
 		now.y = (float)v;
-		obs_sceneitem_set_scale(item, &now);
+		scalePastBounds(item, now);
 	});
 	addSpin(form, text("Settings.Position.Rotation"), obs_sceneitem_get_rot(item), -3600.0, 3600.0, 1.0, 2, page,
 		[item](double v) { obs_sceneitem_set_rot(item, (float)v); });
