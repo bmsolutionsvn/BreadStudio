@@ -37,12 +37,8 @@ bool applyLayout()
 
 	QDockWidget *inputs = find(InputsDockId);
 	QDockWidget *mixer = find(MixerDockId);
-	QDockWidget *scenes = find("scenesDock");
-	QDockWidget *sources = find("sourcesDock");
-	QDockWidget *obsMixer = find("mixerDock");
-	QDockWidget *controls = find("controlsDock");
 	QDockWidget *transitions = find("transitionsDock");
-	if (!inputs || !mixer || !scenes || !sources || !obsMixer || !controls || !transitions) {
+	if (!inputs || !mixer || !transitions) {
 		return false;
 	}
 
@@ -59,13 +55,6 @@ bool applyLayout()
 		}
 		toolbar->setVisible(false);
 	}
-
-	scenes->setVisible(false);
-	sources->setVisible(false);
-	obsMixer->setVisible(false);
-	/* OBS's Controls dock carries Studio Mode, Recording, Virtual Cam and Settings; the
-	 * desk replaces all of it, so it is hidden, not laid out */
-	controls->setVisible(false);
 
 	/* as vMix: the input bar on the left, the mixer docked to its right, then OBS's Scene
 	 * Transitions (the transition and its duration are chosen there) */

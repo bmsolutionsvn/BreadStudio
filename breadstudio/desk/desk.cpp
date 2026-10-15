@@ -9,6 +9,7 @@
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
 #include "Desk.hpp"
+#include "DeskChrome.hpp"
 #include "DeskLayout.hpp"
 #include "InputBar.hpp"
 #include "InputModel.hpp"
@@ -112,9 +113,11 @@ static void onEvent(enum obs_frontend_event event, void *)
 		load();
 		applyLayoutOnFirstRun();
 		hideObsStreamButton();
+		applyChrome();
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
 		load();
+		applyChrome();
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:

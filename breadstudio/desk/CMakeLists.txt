@@ -34,6 +34,8 @@ target_sources(
     AudioBed.hpp
     BusMeters.cpp
     BusMeters.hpp
+    DeskChrome.cpp
+    DeskChrome.hpp
     DeskLayout.cpp
     DeskLayout.hpp
     InputBar.cpp
