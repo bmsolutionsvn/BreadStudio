@@ -1,5 +1,7 @@
 #include "InputModel.hpp"
 
+#include "AudioBed.hpp"
+
 #include <obs-frontend-api.h>
 
 #include <graphics/vec2.h>
@@ -10,6 +12,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -58,6 +61,81 @@ OBSSource baseSource(obs_source_t *input)
 bool hasAudio(obs_source_t *source)
 {
 	return source && (obs_source_get_output_flags(source) & OBS_SOURCE_AUDIO) != 0;
+}
+
+/* the desk's own per-input values, kept in the input's private settings as AudioBed keeps
+ * bread_afv (spec §4) */
+static const char *CategoryKey = "bread_category";
+static const char *ClickKey = "bread_click";
+
+std::string category(obs_source_t *input)
+{
+	if (!input) {
+		return {};
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	const char *value = obs_data_get_string(settings, CategoryKey);
+	return value ? value : "";
+}
+
+void setCategory(obs_source_t *input, const std::string &hex)
+{
+	if (!input) {
+		return;
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	obs_data_set_string(settings, CategoryKey, hex.c_str());
+	obs_frontend_save();
+}
+
+uint32_t categoryColour(obs_source_t *input)
+{
+	const std::string hex = category(input);
+	if (hex.size() != 7 || hex[0] != '#') {
+		return 0;
+	}
+	char *end = nullptr;
+	const unsigned long value = strtoul(hex.c_str() + 1, &end, 16);
+	if (end != hex.c_str() + 7) {
+		return 0;
+	}
+	return 0xFF000000u | (uint32_t)(value & 0xFFFFFFu);
+}
+
+ClickAction clickAction(obs_source_t *input)
+{
+	if (!input) {
+		return ClickAction::Preview;
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	if (obs_data_has_user_value(settings, ClickKey)) {
+		const int value = (int)obs_data_get_int(settings, ClickKey);
+		if (value >= (int)ClickAction::None && value <= (int)ClickAction::Program) {
+			return (ClickAction)value;
+		}
+	}
+	return ClickAction::Preview;
+}
+
+void setClickAction(obs_source_t *input, ClickAction action)
+{
+	if (!input) {
+		return;
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	obs_data_set_int(settings, ClickKey, (int)action);
+	obs_frontend_save();
+}
+
+void copyDeskSettings(obs_source_t *to, obs_source_t *from)
+{
+	if (!to || !from || to == from) {
+		return;
+	}
+	bed().setAfv(to, AudioBed::afv(from));
+	bed().setAudioOn(to, AudioBed::audioOn(from));
+	setCategory(to, category(from));
+	setClickAction(to, clickAction(from));
 }
 
 /* A tile's Cut is done with the frontend API alone: select the Cut transition, switch,
@@ -367,7 +445,8 @@ bool moveInput(int from, int to)
 
 	/* the signal OBS's own drag raises; the multiview follows it */
 	if (!QMetaObject::invokeMethod(list, "scenesReordered")) {
-		blog(LOG_WARNING, "[bread-desk] could not raise 'scenesReordered'; the multiview may show the old order");
+		blog(LOG_WARNING,
+		     "[bread-desk] could not raise 'scenesReordered'; the multiview may show the old order");
 	}
 
 	obs_frontend_save();

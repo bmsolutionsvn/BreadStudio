@@ -4,7 +4,9 @@
 #include "InputPages.hpp"
 
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -38,8 +40,34 @@ InputSettings::InputSettings(obs_source_t *input, QWidget *parent) : QDialog(par
 	auto *buttons = new QHBoxLayout();
 	outer->addLayout(buttons);
 
-	/* copies another input's desk settings (spec §2/I6); wired in the next task */
+	/* copies another input's desk settings (spec §2/I6) */
 	copyFrom = new QPushButton(text("Settings.CopyFrom"), this);
+	connect(copyFrom, &QPushButton::clicked, this, [this] {
+		QStringList names;
+		std::vector<OBSSource> others;
+		for (OBSSource &input : inputs()) {
+			if (input.Get() == source.Get()) {
+				continue;
+			}
+			names << QString::fromUtf8(obs_source_get_name(input));
+			others.emplace_back(input);
+		}
+		if (names.isEmpty()) {
+			QMessageBox::information(this, text("Settings.CopyFrom"), text("Settings.CopyFrom.None"));
+			return;
+		}
+
+		bool accepted = false;
+		const QString chosen = QInputDialog::getItem(
+			this, text("Settings.CopyFrom"), text("Settings.CopyFrom.Prompt"), names, 0, false, &accepted);
+		const int index = names.indexOf(chosen);
+		if (!accepted || index < 0) {
+			return;
+		}
+
+		copyDeskSettings(source, others[(size_t)index].Get());
+		inputsChanged();
+	});
 	buttons->addWidget(copyFrom);
 	buttons->addStretch(1);
 
@@ -71,7 +99,10 @@ void InputSettings::rebuild()
 	while (pages->count() > 0) {
 		QWidget *page = pages->widget(0);
 		pages->removeWidget(page);
-		delete page;
+		/* A page is deleted later, because this can run inside a signal from one of its
+		 * own widgets. The page owns nothing, so deferring the delete releases nothing late. */
+		page->hide();
+		page->deleteLater();
 	}
 	for (const InputSettingPage &page : pagesFor(source, this)) {
 		list->addItem(page.title);

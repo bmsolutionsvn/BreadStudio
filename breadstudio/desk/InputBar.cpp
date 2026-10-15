@@ -245,8 +245,19 @@ void InputBar::layoutTiles()
 
 		display->setInputs({sources.begin() + first, sources.begin() + last}, first);
 		connect(display, &TileDisplay::clicked, this, [this](int index) {
-			if ((size_t)index < sources.size()) {
-				toPreview(sources[(size_t)index]);
+			if ((size_t)index >= sources.size()) {
+				return;
+			}
+			obs_source_t *input = sources[(size_t)index];
+			switch (clickAction(input)) {
+			case ClickAction::None:
+				break;
+			case ClickAction::Preview:
+				toPreview(input);
+				break;
+			case ClickAction::Program:
+				cutToProgram(input);
+				break;
 			}
 		});
 		connect(display, &TileDisplay::menuRequested, this, &InputBar::showMenu);
@@ -398,7 +409,11 @@ void InputBar::updateTally()
 
 	std::vector<uint32_t> frames;
 	for (OBSSource &input : sources) {
-		if (input.Get() == program.Get()) {
+		/* a category tints the tile in place of the tally (spec I4) */
+		const uint32_t category = categoryColour(input);
+		if (category) {
+			frames.push_back(category);
+		} else if (input.Get() == program.Get()) {
 			frames.push_back(ProgramColor);
 		} else if (studio && input.Get() == preview.Get()) {
 			frames.push_back(PreviewColor);

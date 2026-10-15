@@ -6,6 +6,8 @@
 
 #include <obs-frontend-api.h>
 
+#include <QAbstractButton>
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -20,8 +22,8 @@ namespace desk {
 
 namespace {
 
-/* the colours a tile's category can be tagged with (spec I4). The values belong to the
- * model's `bread_category` key, written in the next task. */
+/* the colours a tile's category can be tagged with (spec I4); the values are the model's
+ * bread_category key, a "#rrggbb" string */
 const char *const CategoryPalette[] = {
 	"#d00000", "#e08000", "#e8c800", "#40b000", "#00a090", "#0080d0", "#7040c0", "#c04090",
 };
@@ -138,15 +140,43 @@ QWidget *makeGeneral(obs_source_t *input)
 	 * source-level setting, shown for the types OBS offers it on (spec §3.2) */
 	addDeinterlacing(form, base);
 
-	/* the tile's colour tag (spec I4); the swatches write the model in the next task */
+	/* the tile's colour tag (spec I4): one swatch per palette colour, the input's current one
+	 * ringed; ticking the ringed swatch again clears the tag */
+	const std::string current = category(input);
 	auto *swatches = new QWidget(page);
 	auto *row = new QHBoxLayout(swatches);
 	row->setContentsMargins(0, 0, 0, 0);
+	auto *group = new QButtonGroup(page);
+	group->setExclusive(false); /* so the ringed swatch can be unticked, to clear the tag */
 	for (const char *colour : CategoryPalette) {
 		auto *swatch = new QPushButton(swatches);
+		swatch->setCheckable(true);
 		swatch->setFixedSize(22, 22);
-		swatch->setStyleSheet(QString("background-color: %1;").arg(QString::fromUtf8(colour)));
+		swatch->setChecked(current == colour);
+		group->addButton(swatch);
 		row->addWidget(swatch);
+		QObject::connect(swatch, &QPushButton::toggled, page, [input, group, swatch, colour](bool on) {
+			swatch->setStyleSheet(QString("background-color: %1; border: 2px solid %2;")
+						      .arg(QString::fromUtf8(colour), on ? "#ffffff" : "transparent"));
+			if (!on) {
+				/* unticking the only ringed swatch clears the tag */
+				if (!group->checkedButton()) {
+					setCategory(input, "");
+					inputsChanged();
+				}
+				return;
+			}
+			for (QAbstractButton *other : group->buttons()) {
+				if (other != swatch && other->isChecked()) {
+					other->setChecked(false);
+				}
+			}
+			setCategory(input, colour);
+			inputsChanged();
+		});
+		swatch->setStyleSheet(
+			QString("background-color: %1; border: 2px solid %2;")
+				.arg(QString::fromUtf8(colour), current == colour ? "#ffffff" : "transparent"));
 	}
 	row->addStretch(1);
 	form->addRow(text("Settings.Category"), swatches);
@@ -160,12 +190,14 @@ QWidget *makeGeneral(obs_source_t *input)
 
 	addRestart(form, base, page);
 
-	/* what a click on the tile does (spec §3.2); the bar reads the model in the next task */
+	/* what a click on the tile does (spec §3.2); the bar reads the model at the click */
 	auto *click = new QComboBox(page);
-	click->addItem(text("Settings.Click.None"));
-	click->addItem(text("Settings.Click.Preview"));
-	click->addItem(text("Settings.Click.Program"));
-	click->setCurrentIndex(1); /* Preview, as today's click does */
+	click->addItem(text("Settings.Click.None"), (int)ClickAction::None);
+	click->addItem(text("Settings.Click.Preview"), (int)ClickAction::Preview);
+	click->addItem(text("Settings.Click.Program"), (int)ClickAction::Program);
+	click->setCurrentIndex(click->findData((int)clickAction(input)));
+	QObject::connect(click, &QComboBox::currentIndexChanged, page,
+			 [input, click](int) { setClickAction(input, (ClickAction)click->currentData().toInt()); });
 	form->addRow(text("Settings.Click"), click);
 
 	form->addRow(text("Settings.Resolution"), new QLabel(resolutionText(base), page));

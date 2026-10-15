@@ -4,6 +4,7 @@
 
 #include "LayerGraph.hpp"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,24 @@ OBSSource baseSource(obs_source_t *input);
 
 /* false for null */
 bool hasAudio(obs_source_t *source);
+
+/* the input's category colour tag, a "#rrggbb" string in the private settings key
+ * bread_category; empty for none (inputs spec §2/I4) */
+std::string category(obs_source_t *input);
+void setCategory(obs_source_t *input, const std::string &hex);
+
+/* the category as a packed ARGB colour, 0 when the input has none: the tint the tile and the
+ * MultiView slot draw with (inputs spec §2/I4) */
+uint32_t categoryColour(obs_source_t *input);
+
+/* what a click on the input's tile does (inputs spec §3.2); default Preview */
+enum class ClickAction { None, Preview, Program };
+ClickAction clickAction(obs_source_t *input);
+void setClickAction(obs_source_t *input, ClickAction action);
+
+/* copies the input's desk settings — AFV, the on/off switch, category and click action — from
+ * another input; not its source (inputs spec §2/I6) */
+void copyDeskSettings(obs_source_t *to, obs_source_t *from);
 
 /* to Preview; with Studio Mode off this goes straight to Program, as OBS does */
 void toPreview(obs_source_t *input);

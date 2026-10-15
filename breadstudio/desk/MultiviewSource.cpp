@@ -21,6 +21,7 @@ struct Multiview {
 	OBSSourceAutoRelease program;
 	OBSSourceAutoRelease preview;
 	std::vector<OBSSource> inputs;
+	std::vector<uint32_t> categories; /* one per input: the category tint, 0 for none (spec I4) */
 	bool studio = false;
 
 	/* one private text source per slot */
@@ -78,6 +79,17 @@ static OBSSourceAutoRelease makeLabel(const std::string &text, uint32_t height)
 	return obs_source_create_private("text_gdiplus", "BreadStudio MultiView label", settings);
 }
 
+/* the category tint of each input, gathered on the UI thread with the inputs themselves */
+static std::vector<uint32_t> categoryTints(const std::vector<OBSSource> &inputs)
+{
+	std::vector<uint32_t> tints;
+	tints.reserve(inputs.size());
+	for (const OBSSource &input : inputs) {
+		tints.push_back(categoryColour(input));
+	}
+	return tints;
+}
+
 static uint32_t multiviewWidth(void *)
 {
 	obs_video_info ovi = {};
@@ -118,20 +130,24 @@ static void publishMultiview(Multiview *mv, bool live)
 			nextLabels[(size_t)(2 + i)] = makeLabel(text, height);
 		}
 	}
+	std::vector<uint32_t> nextCategories = categoryTints(nextInputs);
 
 	OBSSourceAutoRelease oldProgram;
 	OBSSourceAutoRelease oldPreview;
 	std::vector<OBSSource> oldInputs;
+	std::vector<uint32_t> oldCategories;
 	std::array<OBSSourceAutoRelease, MultiviewSlots> oldLabels;
 	{
 		std::lock_guard lock(mv->mutex);
 		oldProgram = std::move(mv->program);
 		oldPreview = std::move(mv->preview);
 		oldInputs.swap(mv->inputs);
+		oldCategories.swap(mv->categories);
 		oldLabels.swap(mv->labels);
 		mv->program = std::move(program);
 		mv->preview = std::move(preview);
 		mv->inputs.swap(nextInputs);
+		mv->categories.swap(nextCategories);
 		mv->studio = studio;
 		mv->labels.swap(nextLabels);
 	}
@@ -228,6 +244,10 @@ static void multiviewRender(void *data, gs_effect_t *)
 			frame = ProgramColor;
 		} else if (mv->studio && input && input == preview) {
 			frame = PreviewColor;
+		}
+		/* a category tints the slot in place of the tally (spec I4) */
+		if (i < (int)mv->categories.size() && mv->categories[(size_t)i]) {
+			frame = mv->categories[(size_t)i];
 		}
 		drawSlot(mv, 2 + i, boxes[(size_t)(2 + i)], input, frame);
 	}
