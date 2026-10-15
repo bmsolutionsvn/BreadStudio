@@ -39,9 +39,9 @@ static QIcon afvIcon(const QPalette &palette)
 	QPainter painter(&pixmap);
 	painter.setRenderHint(QPainter::Antialiasing);
 	painter.setPen(QPen(palette.color(QPalette::ButtonText), 1.5));
-	painter.drawRoundedRect(QRectF(2, 4, 11, 9), 1.5, 1.5);    /* the screen */
-	painter.drawLine(QPointF(5, 16), QPointF(10, 16));         /* its stand */
-	painter.drawArc(QRectF(12, 5, 5, 7), -60 * 16, 120 * 16);  /* sound */
+	painter.drawRoundedRect(QRectF(2, 4, 11, 9), 1.5, 1.5);   /* the screen */
+	painter.drawLine(QPointF(5, 16), QPointF(10, 16));        /* its stand */
+	painter.drawArc(QRectF(12, 5, 5, 7), -60 * 16, 120 * 16); /* sound */
 	painter.drawArc(QRectF(13, 3, 7, 11), -60 * 16, 120 * 16);
 
 	return QIcon(pixmap);
@@ -56,6 +56,7 @@ static void onMute(void *param, calldata_t *)
 
 struct Mixer::Strip {
 	OBSSource source; /* the base of an input, or an OBS audio device */
+	OBSSource input;  /* the input this strip is for; null for an OBS audio device */
 	obs_fader_t *fader = nullptr;
 	obs_volmeter_t *volmeter = nullptr;
 	std::atomic<float> peakDb{Silent};
@@ -135,6 +136,7 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	auto owned = std::make_unique<Strip>();
 	Strip *strip = owned.get();
 	strip->source = source;
+	strip->input = input;
 
 	strip->widget = new QWidget(this);
 	strip->widget->setFixedWidth(108);
@@ -174,9 +176,15 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	strip->audio->setText(QString::fromUtf8(AudioGlyph));
 	strip->audio->setToolTip(text("Audio.Tip"));
 	strip->audio->setCheckable(true);
-	strip->audio->setChecked(!obs_source_muted(source));
-	connect(strip->audio, &QToolButton::clicked, this,
-		[strip](bool on) { obs_source_set_muted(strip->source, !on); });
+	strip->audio->setChecked(input ? AudioBed::audioOn(input) : !obs_source_muted(source));
+	connect(strip->audio, &QToolButton::clicked, this, [strip](bool on) {
+		/* an input's button is its own on/off intent; an OBS audio device has no AFV */
+		if (strip->input) {
+			bed().setAudioOn(strip->input, on);
+		} else {
+			obs_source_set_muted(strip->source, !on);
+		}
+	});
 	switches->addWidget(strip->audio);
 	strip->muteSignal.Connect(obs_source_get_signal_handler(source), "mute", onMute, this);
 
@@ -198,8 +206,8 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	phones->setCheckable(true);
 	phones->setChecked(obs_source_get_monitoring_type(source) != OBS_MONITORING_TYPE_NONE);
 	connect(phones, &QToolButton::clicked, this, [strip](bool on) {
-		obs_source_set_monitoring_type(strip->source, on ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT
-								  : OBS_MONITORING_TYPE_NONE);
+		obs_source_set_monitoring_type(strip->source,
+					       on ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT : OBS_MONITORING_TYPE_NONE);
 	});
 	switches->addWidget(phones);
 	switches->addStretch(1);
@@ -262,7 +270,8 @@ void Mixer::clear()
 void Mixer::syncMute()
 {
 	for (auto &strip : strips) {
-		strip->audio->setChecked(!obs_source_muted(strip->source));
+		strip->audio->setChecked(strip->input ? AudioBed::audioOn(strip->input)
+						      : !obs_source_muted(strip->source));
 	}
 }
 
@@ -285,7 +294,7 @@ void Mixer::tick()
 	ticks = 0;
 	for (size_t bus = 0; bus < MAX_AUDIO_MIXES; bus++) {
 		busNumber[bus]->setText(busHold[bus] > -100.0f ? QString::number((double)busHold[bus], 'f', 1)
-							      : QString("-"));
+							       : QString("-"));
 		busHold[bus] = Silent;
 	}
 }

@@ -119,6 +119,7 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
 		if (loaded) {
+			bed().sync();
 			bar->updateTally();
 			OutputEngine::instance().refreshSources();
 		}

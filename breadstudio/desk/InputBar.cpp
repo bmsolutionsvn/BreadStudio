@@ -1,4 +1,5 @@
 #include "InputBar.hpp"
+#include "AudioBed.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
 #include "InputSelect.hpp"
@@ -323,22 +324,20 @@ QWidget *InputBar::makeFooter(int index)
 	});
 	buttons->addWidget(cut);
 
-	/* the same switch as the mixer strip's: the base's mute, inverted (spec §5.1) */
+	/* the same switch as the mixer strip's: the input's own on/off intent (spec §5.1);
+	 * AFV and Program are applied as an effective mute by AudioBed */
 	OBSSource base = baseSource(input);
 	auto *audio = new QToolButton(footer);
 	audio->setText(text("AudioButton"));
 	audio->setToolTip(text("Audio.Tip"));
 	audio->setCheckable(true);
 	audio->setEnabled(hasAudio(base));
-	audio->setChecked(hasAudio(base) && !obs_source_muted(base));
+	audio->setChecked(hasAudio(base) && AudioBed::audioOn(input));
 	connect(audio, &QToolButton::clicked, this, [this, index](bool on) {
 		if ((size_t)index >= sources.size()) {
 			return;
 		}
-		OBSSource target = baseSource(sources[(size_t)index]);
-		if (target) {
-			obs_source_set_muted(target, !on);
-		}
+		bed().setAudioOn(sources[(size_t)index], on);
 	});
 	buttons->addWidget(audio);
 	audioButtons.push_back(audio);
@@ -433,7 +432,7 @@ void InputBar::syncAudioButtons()
 	for (size_t i = 0; i < audioButtons.size() && i < sources.size(); i++) {
 		OBSSource base = baseSource(sources[i]);
 		if (base) {
-			audioButtons[i]->setChecked(!obs_source_muted(base));
+			audioButtons[i]->setChecked(AudioBed::audioOn(sources[i]));
 		}
 	}
 }

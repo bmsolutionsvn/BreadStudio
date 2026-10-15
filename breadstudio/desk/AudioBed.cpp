@@ -11,6 +11,7 @@
 namespace desk {
 
 static const char *AfvKey = "bread_afv";
+static const char *AudioOnKey = "bread_audio_on";
 
 /* OBS's frontend uses channels 0 to 6. The bed takes the highest free one. */
 static const uint32_t FirstChannel = MAX_CHANNELS - 1;
@@ -41,6 +42,23 @@ void AudioBed::setAfv(obs_source_t *input, bool on)
 {
 	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
 	obs_data_set_bool(settings, AfvKey, on);
+	sync();
+	obs_frontend_save();
+}
+
+bool AudioBed::audioOn(obs_source_t *input)
+{
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	if (obs_data_has_user_value(settings, AudioOnKey)) {
+		return obs_data_get_bool(settings, AudioOnKey);
+	}
+	return true;
+}
+
+void AudioBed::setAudioOn(obs_source_t *input, bool on)
+{
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	obs_data_set_bool(settings, AudioOnKey, on);
 	sync();
 	obs_frontend_save();
 }
@@ -88,6 +106,19 @@ void AudioBed::clear()
 
 void AudioBed::sync()
 {
+	/* drive each base's mute from AFV and Program: heard only if the input's own switch is
+	 * on and, when AFV is on, the input is on Program. This runs even with no bed: the bed
+	 * needs a free output channel, AFV does not. */
+	OBSSourceAutoRelease program = obs_frontend_get_current_scene();
+	for (OBSSource &input : inputs()) {
+		OBSSource base = baseSource(input);
+		if (!base) {
+			continue;
+		}
+		const bool onProgram = program && input.Get() == program.Get();
+		obs_source_set_muted(base, !audioOn(input) || (afv(input) && !onProgram));
+	}
+
 	if (!scene) {
 		return;
 	}
