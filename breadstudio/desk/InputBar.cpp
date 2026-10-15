@@ -1,6 +1,7 @@
 #include "InputBar.hpp"
 #include "AudioBed.hpp"
 #include "Desk.hpp"
+#include "DeskLayout.hpp"
 #include "InputModel.hpp"
 #include "InputSelect.hpp"
 #include "InputSettings.hpp"
@@ -156,6 +157,14 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	streamSettings->setToolTip(text("Stream.Title"));
 	connect(streamSettings, &QPushButton::clicked, this, [this] { openStreamWindow(); });
 	footer->addWidget(streamSettings);
+
+	/* OBS's own menus, which the desk hides the menu bar for (DeskLayout) */
+	auto *menu = new QToolButton(this);
+	menu->setText(QString::fromUtf8("\xE2\x98\xB0")); /* U+2630 */
+	menu->setToolTip(text("Menu"));
+	menu->setPopupMode(QToolButton::InstantPopup);
+	menu->setMenu(obsMainMenu());
+	footer->addWidget(menu);
 
 	/* the button is red while any destination is live, and says so */
 	connect(&streamTimer, &QTimer::timeout, this, &InputBar::updateOutputs);
