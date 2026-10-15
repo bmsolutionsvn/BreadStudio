@@ -4,11 +4,14 @@
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
+#include <QAction>
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMenuBar>
 #include <QPushButton>
 #include <QToolBar>
+#include <QToolButton>
 
 namespace desk {
 
@@ -103,6 +106,42 @@ void hideObsStreamButton()
 		return;
 	}
 	button->setVisible(false);
+}
+
+void addTopMenu()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	QMenuBar *bar = main ? main->menuBar() : nullptr;
+	if (!main || !bar) {
+		blog(LOG_WARNING,
+		     "[bread-desk] the main window or its menu bar was not found; the top menu was not added");
+		return;
+	}
+
+	/* the menu bar is hidden, so its top-level menus (File first, then Edit, View, Docks,
+	 * Profile, Scene Collection, Tools and Help — the order the menu bar holds them in) move
+	 * into one popup, keeping that order */
+	QMenu *popup = new QMenu(main);
+	for (QAction *action : bar->actions()) {
+		if (action->menu()) {
+			popup->addMenu(action->menu());
+		} else {
+			popup->addAction(action);
+		}
+	}
+	bar->setVisible(false);
+
+	QToolBar *toolbar = new QToolBar(main);
+	toolbar->setObjectName("breadTopMenu");
+	toolbar->setMovable(false);
+	main->addToolBar(Qt::TopToolBarArea, toolbar);
+
+	QToolButton *button = new QToolButton(toolbar);
+	button->setText(QString::fromUtf8("\xE2\x98\xB0"));
+	button->setPopupMode(QToolButton::InstantPopup);
+	button->setMenu(popup);
+	button->setToolTip(text("Menu"));
+	toolbar->addWidget(button);
 }
 
 } // namespace desk

@@ -14,4 +14,9 @@ void applyLayoutOnFirstRun();
  * (outputs spec §4.5). Found by its name; when it is not found, the log says so and it stays. */
 void hideObsStreamButton();
 
+/* The menu bar is hidden, so OBS's top-level menus (File with Settings… and Exit, View, Profile,
+ * Scene Collection and the rest) are moved into one popup behind a compact ☰ button in a slim
+ * top toolbar. Does nothing but log when the main window or its menu bar is not found. */
+void addTopMenu();
+
 } // namespace desk
