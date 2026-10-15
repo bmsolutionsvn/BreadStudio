@@ -174,6 +174,15 @@ Tasks 4 to 6.
    Program and nothing is green. Changing Program, Preview or the input list
    is reflected within a second; changing the size restarts only its own
    receivers.
+10. Output 2 set to NDI, and a second PC running NDI Studio Monitor or vMix:
+    the output appears by name within five seconds, plays with sound, and the
+    Outputs window reads one receiver; closing the receiver returns it to 0.
+    With the DLL renamed away, the NDI column is greyed with the reason and
+    every other output still works.
+11. Output 2 set to OMT, received by another BreadStudio's OMT input, in all
+    three modes (OMT, OMT-HX HEVC, OMT-HX H.264): picture and sound, the
+    receiver count in the Outputs window, and a mode change followed without
+    touching the input.
 
 ## Before a run
 
