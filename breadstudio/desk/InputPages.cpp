@@ -68,7 +68,7 @@ void addDeinterlacing(QFormLayout *form, obs_source_t *base)
 /* Restart with transition is the base's own "restart on activate", where its type has one: the
  * media and slideshow sources do (spec §3.2). Play and Pause with transition are the scene
  * item's behaviour, not a source setting, so they are not offered here. */
-void addRestart(QVBoxLayout *outer, obs_source_t *base, QWidget *parent)
+void addRestart(QFormLayout *form, obs_source_t *base, QWidget *parent)
 {
 	obs_properties_t *props = obs_source_properties(base);
 	obs_property_t *property = obs_properties_get(props, "restart_on_activate");
@@ -86,7 +86,7 @@ void addRestart(QVBoxLayout *outer, obs_source_t *base, QWidget *parent)
 		obs_data_set_bool(now, "restart_on_activate", on);
 		obs_source_update(base, now);
 	});
-	outer->addWidget(check);
+	form->addRow(check);
 }
 
 QString resolutionText(obs_source_t *base)
@@ -151,13 +151,14 @@ QWidget *makeGeneral(obs_source_t *input)
 	row->addStretch(1);
 	form->addRow(text("Settings.Category"), swatches);
 
-	/* the desk's AFV, and the base's own automatic behaviour where its type has one (spec §3.2) */
+	/* the desk's AFV, and the base's own automatic behaviour where its type has one (spec §3.2);
+	 * both sit in the form so the page reads in vMix's order */
 	auto *afv = new QCheckBox(text("Settings.Afv"), page);
 	afv->setChecked(AudioBed::afv(input));
 	QObject::connect(afv, &QCheckBox::toggled, page, [input](bool on) { bed().setAfv(input, on); });
-	outer->addWidget(afv);
+	form->addRow(afv);
 
-	addRestart(outer, base, page);
+	addRestart(form, base, page);
 
 	/* what a click on the tile does (spec §3.2); the bar reads the model in the next task */
 	auto *click = new QComboBox(page);
