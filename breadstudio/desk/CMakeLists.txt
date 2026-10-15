@@ -41,6 +41,8 @@ target_sources(
     InputModel.cpp
     InputModel.hpp
     InputPage.hpp
+    InputPages.cpp
+    InputPages.hpp
     InputSelect.cpp
     InputSelect.hpp
     InputSettings.cpp

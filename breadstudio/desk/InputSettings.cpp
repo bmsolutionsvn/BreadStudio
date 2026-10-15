@@ -1,129 +1,90 @@
 #include "InputSettings.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
-#include "InputSelect.hpp"
-
-#include <obs-frontend-api.h>
+#include "InputPages.hpp"
 
 #include <QHBoxLayout>
-#include <QLabel>
 #include <QListWidget>
-#include <QMenu>
-#include <QMessageBox>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 namespace desk {
 
 InputSettings::InputSettings(obs_source_t *input, QWidget *parent) : QDialog(parent), source(input)
 {
-	setWindowTitle(text("Settings.Title").arg(QString::fromUtf8(obs_source_get_name(source))));
 	setAttribute(Qt::WA_DeleteOnClose);
+	resize(760, 620);
 
-	auto *layout = new QVBoxLayout(this);
+	auto *outer = new QVBoxLayout(this);
 
-	/* an empty scene made outside the desk has no base */
-	auto *baseButton = new QPushButton(text("Settings.Base"), this);
-	baseButton->setEnabled(baseSource(source).Get() != nullptr);
-	/* the page this input was made on, filled in (network inputs spec §3.2) */
-	connect(baseButton, &QPushButton::clicked, this, [this] {
-		if (!baseSource(source)) {
-			return;
-		}
-		auto *window = new InputSelect(source, parentWidget());
-		window->setAttribute(Qt::WA_DeleteOnClose);
-		window->open();
-	});
-	layout->addWidget(baseButton);
+	auto *body = new QHBoxLayout();
+	outer->addLayout(body, 1);
 
-	layout->addWidget(new QLabel(text("Settings.Layers"), this));
 	list = new QListWidget(this);
-	layout->addWidget(list, 1);
-	connect(list, &QListWidget::itemChanged, this, [this](QListWidgetItem *item) {
-		if (!loading) {
-			setLayerVisible(source, item->data(Qt::UserRole).toLongLong(),
-					item->checkState() == Qt::Checked);
+	list->setFixedWidth(200);
+	body->addWidget(list);
+
+	pages = new QStackedWidget(this);
+	body->addWidget(pages, 1);
+
+	/* the list and the stack are built in the same order, so a row is its page */
+	connect(list, &QListWidget::currentRowChanged, this, [this](int row) {
+		if (row >= 0) {
+			pages->setCurrentIndex(row);
 		}
 	});
 
 	auto *buttons = new QHBoxLayout();
-	layout->addLayout(buttons);
+	outer->addLayout(buttons);
 
-	/* a layer can only be another input (spec D2) */
-	auto *add = new QPushButton(text("Settings.AddLayer"), this);
-	auto *addMenu = new QMenu(add);
-	add->setMenu(addMenu);
-	connect(addMenu, &QMenu::aboutToShow, this, [this, addMenu] {
-		addMenu->clear();
-		for (OBSSource &other : inputs()) {
-			if (other.Get() == source.Get()) {
-				continue;
-			}
-			QAction *action = addMenu->addAction(QString::fromUtf8(obs_source_get_name(other)));
-			connect(action, &QAction::triggered, this, [this, other] {
-				if (!addLayer(source, other)) {
-					QMessageBox::warning(this, windowTitle(), text("Settings.Loop"));
-				}
-				reload();
-			});
-		}
-	});
-	connect(addMenu, &QMenu::aboutToHide, addMenu, [addMenu] {
-		/* the actions hold references to inputs; let them go once a choice has run */
-		QMetaObject::invokeMethod(addMenu, [addMenu] { addMenu->clear(); }, Qt::QueuedConnection);
-	});
-	buttons->addWidget(add);
+	/* copies another input's desk settings (spec §2/I6); wired in the next task */
+	copyFrom = new QPushButton(text("Settings.CopyFrom"), this);
+	buttons->addWidget(copyFrom);
+	buttons->addStretch(1);
 
-	auto *remove = new QPushButton(text("Settings.Remove"), this);
-	connect(remove, &QPushButton::clicked, this, [this] {
-		removeLayer(source, selected());
-		reload();
-	});
-	buttons->addWidget(remove);
+	auto *close = new QPushButton(text("Settings.Close"), this);
+	connect(close, &QPushButton::clicked, this, &QDialog::close);
+	buttons->addWidget(close);
 
-	auto *up = new QPushButton(text("Settings.Up"), this);
-	connect(up, &QPushButton::clicked, this, [this] {
-		moveLayer(source, selected(), true);
-		reload();
-	});
-	buttons->addWidget(up);
-
-	auto *down = new QPushButton(text("Settings.Down"), this);
-	connect(down, &QPushButton::clicked, this, [this] {
-		moveLayer(source, selected(), false);
-		reload();
-	});
-	buttons->addWidget(down);
-
-	layout->addWidget(new QLabel(text("Settings.Hint"), this));
-
-	/* so the layers can be dragged in the Preview pane (spec §4.3) */
-	toPreview(source);
-	reload();
+	rebuild();
 }
 
-int64_t InputSettings::selected() const
+void InputSettings::rebuild()
 {
-	QListWidgetItem *item = list->currentItem();
-	return item ? item->data(Qt::UserRole).toLongLong() : -1;
+	const int keep = list->currentRow();
+
+	/* the title names the input's place in the bar, as vMix's does (design I1) */
+	const QString name = QString::fromUtf8(obs_source_get_name(source));
+	int index = 0;
+	const std::vector<OBSSource> all = inputs();
+	for (size_t i = 0; i < all.size(); i++) {
+		if (all[i].Get() == source.Get()) {
+			index = (int)i + 1;
+			break;
+		}
+	}
+	setWindowTitle(text("Settings.Title").arg(QString("%1 %2").arg(index).arg(name)));
+
+	/* a page reads its backing again, so the stack is thrown away and built afresh */
+	list->clear();
+	while (pages->count() > 0) {
+		QWidget *page = pages->widget(0);
+		pages->removeWidget(page);
+		delete page;
+	}
+	for (const InputSettingPage &page : pagesFor(source, this)) {
+		list->addItem(page.title);
+		pages->addWidget(page.widget);
+	}
+	if (list->count() > 0) {
+		list->setCurrentRow(keep >= 0 && keep < list->count() ? keep : 0);
+	}
 }
 
 void InputSettings::reload()
 {
-	const int64_t keep = selected();
-
-	loading = true;
-	list->clear();
-	for (const Layer &layer : layers(source)) {
-		auto *item = new QListWidgetItem(QString::fromUtf8(layer.name.c_str()), list);
-		item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-		item->setCheckState(layer.visible ? Qt::Checked : Qt::Unchecked);
-		item->setData(Qt::UserRole, QVariant::fromValue<qlonglong>(layer.id));
-		if (layer.id == keep) {
-			list->setCurrentItem(item);
-		}
-	}
-	loading = false;
+	rebuild();
 }
 
 } // namespace desk
