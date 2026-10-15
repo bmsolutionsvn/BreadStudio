@@ -12,6 +12,8 @@
 #include <QPushButton>
 #include <QToolBar>
 
+#include <cstring>
+
 namespace desk {
 
 /* Bump when a change to applyLayout() must reach installs that already ran it: an install
@@ -96,6 +98,45 @@ void hideObsStreamButton()
 	button->setVisible(false);
 }
 
+/* The menus the ☰ keeps (K2). Edit, View, Docks, Tools and Help are dropped: the desk's
+ * surface is the desk, and those menus reach OBS's scene editor, docks and help. */
+static const char *const KeptMenus[] = {
+	"menu_File",
+	"profileMenu",
+	"sceneCollectionMenu",
+};
+
+/* The File entries that stay outside the desk's job (cleanup spec §6). */
+static const char *const DroppedFileItems[] = {
+	"actionShow_Recordings",
+	"actionRemux",
+	"actionShowSettingsFolder",
+	"actionShowProfileFolder",
+};
+
+/* Dropping an entry leaves its separators behind; take out the ones now at an edge. */
+static void tidySeparators(QMenu *menu)
+{
+	QList<QAction *> actions = menu->actions();
+	if (!actions.isEmpty() && actions.first()->isSeparator()) {
+		menu->removeAction(actions.first());
+	}
+	actions = menu->actions();
+	if (!actions.isEmpty() && actions.last()->isSeparator()) {
+		menu->removeAction(actions.last());
+	}
+}
+
+static bool keptMenu(const char *name)
+{
+	for (const char *kept : KeptMenus) {
+		if (strcmp(name, kept) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 QMenu *obsMainMenu()
 {
 	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -105,19 +146,46 @@ QMenu *obsMainMenu()
 		return nullptr;
 	}
 
-	/* built once, then cached. The menu bar is hidden, so its top-level menus (File first,
-	 * then Edit, View, Docks, Profile, Scene Collection, Tools and Help — the order the menu
-	 * bar holds them in) move into one popup, keeping that order */
+	/* built once, then cached. The menu bar is hidden, so the menus the desk keeps move into
+	 * one popup; the rest are never added to it */
 	static QMenu *popup = nullptr;
 	if (!popup) {
 		popup = new QMenu(main);
 		for (QAction *action : bar->actions()) {
-			if (action->menu()) {
-				popup->addMenu(action->menu());
-			} else {
-				popup->addAction(action);
+			QMenu *menu = action->menu();
+			if (!menu) {
+				continue;
 			}
+			const QByteArray name = menu->objectName().toUtf8();
+			if (!keptMenu(name.constData())) {
+				continue;
+			}
+			bool dropped = false;
+			for (const char *name : DroppedFileItems) {
+				QAction *item = main->findChild<QAction *>(name);
+				if (item && menu->actions().contains(item)) {
+					menu->removeAction(item);
+					dropped = true;
+				}
+			}
+			if (dropped) {
+				tidySeparators(menu);
+			}
+			popup->addMenu(menu);
 		}
+
+		/* the desk keeps OBS's Multiview projector — the one part of View that puts a
+		 * view on a local monitor (K5). OBS fills this submenu's monitor list from the
+		 * View menu's hover, and View is dropped, so the list is whatever it was at
+		 * launch: a monitor added while BreadStudio runs is offered only after a
+		 * restart. */
+		if (QMenu *multiview = main->findChild<QMenu *>("multiviewProjectorMenu")) {
+			popup->addMenu(text("Projector"))->addMenu(multiview);
+		} else {
+			blog(LOG_WARNING,
+			     "[bread-desk] the Multiview projector menu was not found; the projector is not offered");
+		}
+
 		bar->setVisible(false);
 	}
 	return popup;
