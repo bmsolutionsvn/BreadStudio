@@ -96,13 +96,14 @@ std::string describe(const Entry &entry)
 
 std::vector<Seen> seen()
 {
-	const std::vector<std::string> addresses = omthx::discover();
-
 	std::vector<Seen> result;
 	std::lock_guard lock(mutex);
 	if (stopping) {
 		return result;
 	}
+
+	const std::vector<std::string> addresses = omthx::discover();
+
 	asked = Clock::now();
 	if (!worker.joinable()) {
 		worker = std::thread(work);
