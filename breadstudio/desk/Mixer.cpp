@@ -176,7 +176,7 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	strip->audio->setText(QString::fromUtf8(AudioGlyph));
 	strip->audio->setToolTip(text("Audio.Tip"));
 	strip->audio->setCheckable(true);
-	strip->audio->setChecked(input ? AudioBed::audioOn(input) : !obs_source_muted(source));
+	strip->audio->setChecked(!obs_source_muted(source));
 	connect(strip->audio, &QToolButton::clicked, this, [strip](bool on) {
 		/* an input's button is its own on/off intent; an OBS audio device has no AFV */
 		if (strip->input) {
@@ -270,8 +270,9 @@ void Mixer::clear()
 void Mixer::syncMute()
 {
 	for (auto &strip : strips) {
-		strip->audio->setChecked(strip->input ? AudioBed::audioOn(strip->input)
-						      : !obs_source_muted(strip->source));
+		/* the base's mute is the effective state: the input's own switch with AFV applied,
+		 * so under AFV the button follows Program, as vMix */
+		strip->audio->setChecked(!obs_source_muted(strip->source));
 	}
 }
 
