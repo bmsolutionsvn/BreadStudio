@@ -6,6 +6,8 @@
 
 #include <omthx/omthx.h>
 
+#include <media-io/video-scaler.h>
+
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -35,6 +37,10 @@ struct OmtOutput {
 	int sampleRate = 0;
 	size_t channels = 0;
 	std::atomic<bool> started = false;
+
+	video_scaler_t *scaler = nullptr; /* converts the canvas to BGRA when it is not already */
+	std::vector<uint8_t> bgraBuffer;  /* the converted frame */
+	int bgraLinesize = 0;
 };
 
 /* create() adds this to the output's proc handler before its definition below */
@@ -72,7 +78,10 @@ void *omtOutputCreate(obs_data_t *settings, obs_output_t *output)
 
 void omtOutputDestroy(void *data)
 {
-	delete static_cast<OmtOutput *>(data);
+	auto *o = static_cast<OmtOutput *>(data);
+	video_scaler_destroy(o->scaler);
+	o->scaler = nullptr;
+	delete o;
 }
 
 bool omtOutputStart(void *data)
@@ -87,15 +96,29 @@ bool omtOutputStart(void *data)
 	uint32_t flags = 0;
 	if (video) {
 		const video_output_info *info = video_output_get_info(video);
-		if (info->format != VIDEO_FORMAT_BGRA) {
-			blog(LOG_WARNING, "[bread-omt] output '%s': the canvas must be BGRA", o->name.c_str());
-			return false;
-		}
 		o->width = info->width;
 		o->height = info->height;
 		o->fpsNum = (int)info->fps_num;
 		o->fpsDen = (int)info->fps_den;
-		o->alpha = true; /* a BGRA canvas is premultiplied, which is what sendVideo is told */
+		o->alpha = true; /* the BGRA frame handed on is premultiplied, which is what sendVideo is told */
+		/* Output 1 has no canvas and is NV12 by default, so convert whatever the engine gives us */
+		if (info->format != VIDEO_FORMAT_BGRA) {
+			video_scale_info src = {};
+			src.format = info->format;
+			src.width = info->width;
+			src.height = info->height;
+			src.colorspace = info->colorspace;
+			src.range = info->range;
+			video_scale_info dst = src;
+			dst.format = VIDEO_FORMAT_BGRA;
+			if (video_scaler_create(&o->scaler, &dst, &src, VIDEO_SCALE_POINT) != VIDEO_SCALER_SUCCESS) {
+				blog(LOG_WARNING, "[bread-omt] output '%s': the canvas cannot be converted to BGRA",
+				     o->name.c_str());
+				return false;
+			}
+			o->bgraBuffer.resize((size_t)o->width * o->height * 4);
+			o->bgraLinesize = (int)(o->width * 4);
+		}
 		flags |= OBS_OUTPUT_VIDEO;
 	}
 	if (audio) {
@@ -130,8 +153,13 @@ void omtOutputStop(void *data, uint64_t)
 	o->started = false;
 	obs_output_end_data_capture(o->output);
 
-	std::lock_guard lock(o->senderMutex);
-	o->sender.reset();
+	{
+		std::lock_guard lock(o->senderMutex);
+		o->sender.reset();
+	}
+
+	video_scaler_destroy(o->scaler);
+	o->scaler = nullptr;
 }
 
 void getReceivers(void *data, calldata_t *call)
@@ -173,7 +201,16 @@ void omtOutputRawVideo(void *data, video_data *frame)
 	format.alpha = o->alpha;
 
 	const size_t size = (size_t)o->width * o->height * 4;
-	const std::span<const uint8_t> bgra(frame->data[0], size);
+	const uint8_t *pixels = frame->data[0];
+	if (o->scaler) {
+		uint8_t *out = o->bgraBuffer.data();
+		uint32_t outLinesize = (uint32_t)o->bgraLinesize;
+		if (!video_scaler_scale(o->scaler, &out, &outLinesize, frame->data, frame->linesize)) {
+			return;
+		}
+		pixels = o->bgraBuffer.data();
+	}
+	const std::span<const uint8_t> bgra(pixels, size);
 	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
 	const int64_t timestamp = (int64_t)frame->timestamp / 100;
 	sender->sendVideo(format, bgra, o->alpha, timestamp);
