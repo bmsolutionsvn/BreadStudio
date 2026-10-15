@@ -34,6 +34,29 @@ enum class ClickAction { None, Preview, Program };
 ClickAction clickAction(obs_source_t *input);
 void setClickAction(obs_source_t *input, ClickAction action);
 
+/* when a trigger fires: the input becoming Program or Preview, or a click on its tile */
+enum class TriggerWhen { Program, Preview, Click };
+
+/* what the desk can run on a trigger (inputs spec §3.2) */
+enum class TriggerAction {
+	Nothing,
+	StartRecording,
+	StopRecording,
+	StartStream,
+	StopStream,
+	SendToPreview,
+	SendToProgram
+};
+
+/* the input's trigger for `when`, from the private settings key bread_triggers, a JSON object;
+ * Nothing when unset (inputs spec §3.2) */
+TriggerAction trigger(obs_source_t *input, TriggerWhen when);
+void setTrigger(obs_source_t *input, TriggerWhen when, TriggerAction action);
+
+/* runs the input's trigger for `when`. A dispatch that would re-enter the same input and
+ * moment is skipped, so an action cannot loop through the scene change it causes. */
+void runTriggers(obs_source_t *input, TriggerWhen when);
+
 /* copies the input's desk settings — AFV, the on/off switch, category and click action — from
  * another input; not its source (inputs spec §2/I6) */
 void copyDeskSettings(obs_source_t *to, obs_source_t *from);

@@ -259,6 +259,8 @@ void InputBar::layoutTiles()
 				cutToProgram(input);
 				break;
 			}
+			/* the input's own on-click trigger, whatever the click action did (spec §3.2) */
+			runTriggers(input, TriggerWhen::Click);
 		});
 		connect(display, &TileDisplay::menuRequested, this, &InputBar::showMenu);
 		/* the target of a drag may be in another row */

@@ -1,6 +1,7 @@
 #include "InputModel.hpp"
 
 #include "AudioBed.hpp"
+#include "OutputEngine.hpp"
 
 #include <obs-frontend-api.h>
 
@@ -67,6 +68,7 @@ bool hasAudio(obs_source_t *source)
  * bread_afv (spec §4) */
 static const char *CategoryKey = "bread_category";
 static const char *ClickKey = "bread_click";
+static const char *TriggersKey = "bread_triggers";
 
 std::string category(obs_source_t *input)
 {
@@ -124,6 +126,52 @@ void setClickAction(obs_source_t *input, ClickAction action)
 	}
 	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
 	obs_data_set_int(settings, ClickKey, (int)action);
+	obs_frontend_save();
+}
+
+/* the key of `when` inside the bread_triggers object */
+static const char *triggerKey(TriggerWhen when)
+{
+	switch (when) {
+	case TriggerWhen::Program:
+		return "program";
+	case TriggerWhen::Preview:
+		return "preview";
+	case TriggerWhen::Click:
+		return "click";
+	}
+	return "program";
+}
+
+TriggerAction trigger(obs_source_t *input, TriggerWhen when)
+{
+	if (!input) {
+		return TriggerAction::Nothing;
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	OBSDataAutoRelease triggers = obs_data_get_obj(settings, TriggersKey);
+	if (!triggers) {
+		return TriggerAction::Nothing;
+	}
+	const int value = (int)obs_data_get_int(triggers, triggerKey(when));
+	if (value < (int)TriggerAction::Nothing || value > (int)TriggerAction::SendToProgram) {
+		return TriggerAction::Nothing;
+	}
+	return (TriggerAction)value;
+}
+
+void setTrigger(obs_source_t *input, TriggerWhen when, TriggerAction action)
+{
+	if (!input) {
+		return;
+	}
+	OBSDataAutoRelease settings = obs_source_get_private_settings(input);
+	OBSDataAutoRelease triggers = obs_data_get_obj(settings, TriggersKey);
+	if (!triggers) {
+		triggers = obs_data_create();
+	}
+	obs_data_set_int(triggers, triggerKey(when), (int)action);
+	obs_data_set_obj(settings, TriggersKey, triggers);
 	obs_frontend_save();
 }
 
@@ -244,11 +292,68 @@ void onTransitionStopped()
 	}
 }
 
+/* the input and moment whose trigger is running, so a trigger cannot re-enter itself when its
+ * own action raises the event that would run it again (e.g. Send to Program on Program) */
+static obs_source_t *runningTrigger = nullptr;
+static TriggerWhen runningTriggerWhen = TriggerWhen::Program;
+
+static void runTrigger(obs_source_t *input, TriggerAction action)
+{
+	switch (action) {
+	case TriggerAction::Nothing:
+		break;
+	case TriggerAction::StartRecording:
+		if (!obs_frontend_recording_active()) {
+			obs_frontend_recording_start();
+		}
+		break;
+	case TriggerAction::StopRecording:
+		if (obs_frontend_recording_active()) {
+			obs_frontend_recording_stop();
+		}
+		break;
+	case TriggerAction::StartStream:
+		OutputEngine::instance().setStreaming(true); /* the desk's stream, not OBS's own */
+		break;
+	case TriggerAction::StopStream:
+		OutputEngine::instance().setStreaming(false);
+		break;
+	case TriggerAction::SendToPreview:
+		toPreview(input);
+		break;
+	case TriggerAction::SendToProgram:
+		cutToProgram(input);
+		break;
+	}
+}
+
+void runTriggers(obs_source_t *input, TriggerWhen when)
+{
+	if (!input) {
+		return;
+	}
+	const TriggerAction action = trigger(input, when);
+	if (action == TriggerAction::Nothing || (runningTrigger == input && runningTriggerWhen == when)) {
+		return;
+	}
+
+	obs_source_t *savedInput = runningTrigger;
+	const TriggerWhen savedWhen = runningTriggerWhen;
+	runningTrigger = input;
+	runningTriggerWhen = when;
+
+	runTrigger(input, action);
+
+	runningTrigger = savedInput;
+	runningTriggerWhen = savedWhen;
+}
+
 void clearModel()
 {
 	restorePending = false;
 	restoreTransition = nullptr;
 	restorePreview = nullptr;
+	runningTrigger = nullptr;
 }
 
 static std::string uuidOf(obs_source_t *source)

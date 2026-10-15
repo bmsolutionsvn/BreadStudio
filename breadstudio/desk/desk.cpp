@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QString>
+#include <QTimer>
 
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
@@ -30,6 +31,10 @@ using namespace desk;
 
 /* true between a scene collection finishing loading and starting to unload */
 static bool loaded = false;
+
+/* true while a collection is loading: OBS raises the scene events after the collection event, so
+ * a scene trigger must not run merely because OBS was opened or a collection was loaded */
+static bool suppressTriggers = false;
 
 static InputBar *bar = nullptr; /* owned by its dock */
 
@@ -61,6 +66,10 @@ static void onSourceRename(void *, calldata_t *)
 static void load()
 {
 	loaded = true;
+	/* the scene events that follow are OBS replaying the collection's scene, not the operator
+	 * changing it, so hold triggers off until the next event-loop turn */
+	suppressTriggers = true;
+	QTimer::singleShot(0, qApp, [] { suppressTriggers = false; });
 	bed().rebuild();
 	bar->refresh();
 	mixer->rebuild();
@@ -78,6 +87,22 @@ static void unload()
 	mixer->clear();
 	clearModel();
 	bed().clear();
+}
+
+/* An input can carry a trigger for the moment it becomes Program or Preview (inputs spec
+ * §3.2); run it here, where the desk already follows the two scene events. */
+static void runSceneTriggers(enum obs_frontend_event event)
+{
+	if (suppressTriggers) {
+		return;
+	}
+	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
+		OBSSourceAutoRelease program = obs_frontend_get_current_scene();
+		runTriggers(program.Get(), TriggerWhen::Program);
+	} else if (event == OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED && obs_frontend_preview_program_mode_active()) {
+		OBSSourceAutoRelease preview = obs_frontend_get_current_preview_scene();
+		runTriggers(preview.Get(), TriggerWhen::Preview);
+	}
 }
 
 static void onEvent(enum obs_frontend_event event, void *)
@@ -122,6 +147,7 @@ static void onEvent(enum obs_frontend_event event, void *)
 			bed().sync();
 			bar->updateTally();
 			OutputEngine::instance().refreshSources();
+			runSceneTriggers(event);
 		}
 		break;
 	default:

@@ -76,6 +76,11 @@ InputSettings::InputSettings(obs_source_t *input, QWidget *parent) : QDialog(par
 	buttons->addWidget(close);
 
 	rebuild();
+
+	/* a layer is placed and sized by dragging it in OBS's Preview pane, so opening the window
+	 * takes the input there once — not on every rebuild(), or an unrelated input change would
+	 * yank it back to Preview (and fire its on-Preview trigger) while the window is open */
+	toPreview(source);
 }
 
 void InputSettings::rebuild()

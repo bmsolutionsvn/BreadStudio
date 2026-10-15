@@ -3,6 +3,7 @@
 #include "AudioBed.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "TileDisplay.hpp"
 
 #include <obs-frontend-api.h>
 #include <properties-view.hpp>
@@ -564,6 +565,189 @@ private:
 	QVBoxLayout *panel = nullptr;
 };
 
+/* Layers / MultiView (spec §3.1): the desk's layers over the input's base — top first, a tick
+ * for shown, up/down and remove — and a small live view of the input as the MultiView draws
+ * it. A layer is added by dragging a source in OBS's Preview pane, so the window leaves the
+ * input on Preview (design I5) and stays non-modal, so that drag still works. */
+class LayersPage : public QWidget {
+public:
+	explicit LayersPage(obs_source_t *source, QWidget *parent) : QWidget(parent), input(source)
+	{
+		auto *outer = new QVBoxLayout(this);
+		outer->addWidget(new QLabel(text("Settings.Layers"), this));
+
+		list = new QListWidget(this);
+		outer->addWidget(list, 1);
+
+		auto *buttons = new QHBoxLayout();
+		outer->addLayout(buttons);
+		auto *remove = new QPushButton(text("Settings.Remove"), this);
+		buttons->addWidget(remove);
+		auto *up = new QPushButton(text("Settings.Up"), this);
+		buttons->addWidget(up);
+		auto *down = new QPushButton(text("Settings.Down"), this);
+		buttons->addWidget(down);
+		buttons->addStretch(1);
+
+		outer->addWidget(new QLabel(text("Settings.Hint"), this));
+
+		view = new TileDisplay(this);
+		outer->addWidget(view, 0, Qt::AlignLeft);
+		view->setInputs({input});
+		view->setFrames({frameColour()});
+
+		QObject::connect(list, &QListWidget::itemChanged, this, [this](QListWidgetItem *item) {
+			if (!loading) {
+				setLayerVisible(input, item->data(Qt::UserRole).toLongLong(),
+						item->checkState() == Qt::Checked);
+			}
+		});
+		QObject::connect(remove, &QPushButton::clicked, this, [this] {
+			removeLayer(input, selected());
+			refresh();
+		});
+		QObject::connect(up, &QPushButton::clicked, this, [this] {
+			moveLayer(input, selected(), true);
+			refresh();
+		});
+		QObject::connect(down, &QPushButton::clicked, this, [this] {
+			moveLayer(input, selected(), false);
+			refresh();
+		});
+
+		refresh();
+	}
+
+	/* The colour and the layer list are read before toPreview moved the input onto Preview, and a
+	 * layer dragged into Preview later raises no event, so read both again each time shown. */
+	void showEvent(QShowEvent *) override
+	{
+		view->setFrames({frameColour()});
+		refresh();
+	}
+
+private:
+	int64_t selected() const
+	{
+		QListWidgetItem *item = list->currentItem();
+		return item ? item->data(Qt::UserRole).toLongLong() : (int64_t)-1;
+	}
+
+	/* the frame the view draws round the picture: the input's category, else its tally, as
+	 * the MultiView draws a slot (spec §3.1) */
+	uint32_t frameColour() const
+	{
+		const uint32_t category = categoryColour(input);
+		if (category) {
+			return category;
+		}
+		OBSSourceAutoRelease program = obs_frontend_get_current_scene();
+		if (program.Get() == input.Get()) {
+			return ProgramColor;
+		}
+		if (obs_frontend_preview_program_mode_active()) {
+			OBSSourceAutoRelease preview = obs_frontend_get_current_preview_scene();
+			if (preview.Get() == input.Get()) {
+				return PreviewColor;
+			}
+		}
+		return IdleColor;
+	}
+
+	void refresh()
+	{
+		const int64_t keep = selected();
+
+		loading = true;
+		list->clear();
+		for (const Layer &layer : layers(input)) {
+			auto *item = new QListWidgetItem(QString::fromUtf8(layer.name.c_str()), list);
+			item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+			item->setCheckState(layer.visible ? Qt::Checked : Qt::Unchecked);
+			item->setData(Qt::UserRole, QVariant::fromValue<qlonglong>(layer.id));
+			if (layer.id == keep) {
+				list->setCurrentItem(item);
+			}
+		}
+		loading = false;
+	}
+
+	OBSSource input;
+	QListWidget *list = nullptr;
+	TileDisplay *view = nullptr;
+	bool loading = false;
+};
+
+/* Triggers (spec §3.1): the three moments the desk can act on, each a choice of the actions
+ * the desk can run. The choices live in the input's private settings, key bread_triggers
+ * (spec §3.2); the desk runs them when the input becomes Program or Preview, or on a click. */
+QWidget *makeTriggers(obs_source_t *input)
+{
+	auto *page = new QWidget();
+	auto *form = new QFormLayout(page);
+
+	const struct {
+		TriggerWhen when;
+		const char *labelKey;
+	} Moments[] = {
+		{TriggerWhen::Program, "Settings.Trigger.Program"},
+		{TriggerWhen::Preview, "Settings.Trigger.Preview"},
+		{TriggerWhen::Click, "Settings.Trigger.Click"},
+	};
+	const struct {
+		TriggerAction action;
+		const char *labelKey;
+	} Actions[] = {
+		{TriggerAction::Nothing, "Settings.TriggerAction.Nothing"},
+		{TriggerAction::StartRecording, "Settings.TriggerAction.StartRecording"},
+		{TriggerAction::StopRecording, "Settings.TriggerAction.StopRecording"},
+		{TriggerAction::StartStream, "Settings.TriggerAction.StartStream"},
+		{TriggerAction::StopStream, "Settings.TriggerAction.StopStream"},
+		{TriggerAction::SendToPreview, "Settings.TriggerAction.SendToPreview"},
+		{TriggerAction::SendToProgram, "Settings.TriggerAction.SendToProgram"},
+	};
+
+	for (const auto &moment : Moments) {
+		auto *combo = new QComboBox(page);
+		for (const auto &action : Actions) {
+			combo->addItem(text(action.labelKey), (int)action.action);
+		}
+		combo->setCurrentIndex(combo->findData((int)trigger(input, moment.when)));
+		QObject::connect(combo, &QComboBox::currentIndexChanged, page, [input, when = moment.when, combo](int) {
+			setTrigger(input, when, (TriggerAction)combo->currentData().toInt());
+		});
+		form->addRow(text(moment.labelKey), combo);
+	}
+
+	return page;
+}
+
+/* Advanced (spec §3.1): the base's own OBS properties — the same panel OBS's source properties
+ * shows, so sync offset and hotkeys are here — and a line naming the vMix features BreadStudio
+ * does not offer, so the absence is explained (design §3.1). */
+QWidget *makeAdvanced(obs_source_t *input)
+{
+	OBSSource base = baseSource(input);
+	if (!base) {
+		return nullptr;
+	}
+
+	auto *page = new QWidget();
+	auto *outer = new QVBoxLayout(page);
+
+	OBSDataAutoRelease settings = obs_source_get_settings(base);
+	outer->addWidget(
+		new OBSPropertiesView(settings.Get(), base.Get(), (PropertiesReloadCallback)obs_source_properties,
+				      (PropertiesUpdateCallback) nullptr, (PropertiesVisualUpdateCb)obs_source_update),
+		1);
+
+	auto *absent = new QLabel(text("Settings.Advanced.Absent"), page);
+	absent->setWordWrap(true);
+	outer->addWidget(absent);
+
+	return page;
+}
+
 } // namespace
 
 std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *)
@@ -604,6 +788,13 @@ std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *)
 	/* every filter on the base, with OBS's own add and remove (spec §3.1) */
 	if (OBSSource base = baseSource(input)) {
 		pages.push_back({text("Settings.Page.Effects"), new EffectsPage(base, nullptr)});
+	}
+
+	/* the desk's layer list and its triggers, and the base's own OBS properties (spec §3.1) */
+	pages.push_back({text("Settings.Page.Layers"), new LayersPage(input, nullptr)});
+	pages.push_back({text("Settings.Page.Triggers"), makeTriggers(input)});
+	if (QWidget *advanced = makeAdvanced(input)) {
+		pages.push_back({text("Settings.Page.Advanced"), advanced});
 	}
 
 	return pages;
