@@ -17,8 +17,6 @@ namespace desk {
 static const float Border = 6.0f;
 
 struct Multiview {
-	obs_source_t *source = nullptr;
-
 	/* gathered on the UI thread by publishMultiview, read on the graphics thread by the render */
 	OBSSourceAutoRelease program;
 	OBSSourceAutoRelease preview;
@@ -161,11 +159,9 @@ static const char *multiviewName(void *)
 	return obs_module_text("Multiview");
 }
 
-static void *multiviewCreate(obs_data_t *, obs_source_t *source)
+static void *multiviewCreate(obs_data_t *, obs_source_t *)
 {
-	auto *mv = new Multiview();
-	mv->source = source;
-	return mv;
+	return new Multiview();
 }
 
 static void multiviewDestroy(void *data)

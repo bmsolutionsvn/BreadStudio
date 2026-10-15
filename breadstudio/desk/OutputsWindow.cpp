@@ -1,6 +1,7 @@
 #include "OutputsWindow.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "MultiviewSource.hpp"
 #include "OutputEngine.hpp"
 #include "SrtDialog.hpp"
 
@@ -25,7 +26,6 @@ namespace desk {
 static const char *NdiType = "bread_ndi_output";
 static const char *OmtType = "bread_omt_output";
 static const char *SrtType = "bread_srt_output";
-static const char *MultiViewId = "bread_multiview";
 
 /* "program", "preview", "multiview", or "input:<uuid>" */
 static QString sourceKey(const OutputConfig &config)
@@ -141,7 +141,7 @@ void OutputsWindow::addRow(int index)
 	row.source->addItem(text("Outputs.Program"), "program");
 	if (index > 0) {
 		row.source->addItem(text("Outputs.Preview"), "preview");
-		if (obs_source_get_display_name(MultiViewId)) {
+		if (obs_source_get_display_name(MultiviewSourceId)) {
 			row.source->addItem(text("Outputs.MultiView"), "multiview");
 		}
 		for (const OBSSource &input : inputs()) {
@@ -279,19 +279,24 @@ void OutputsWindow::updateStatus()
 			lines << QString::fromStdString(status.encoder);
 		}
 		if (config.ndi) {
-			lines << "NDI: " + stateText(status.ndi, false);
+			lines << text("Outputs.State.Ndi").arg(stateText(status.ndi, false));
 		}
 		if (config.omt != OmtMode::Off) {
-			lines << "OMT: " + stateText(status.omt, false);
+			lines << text("Outputs.State.Omt").arg(stateText(status.omt, false));
 		}
 		if (config.srt) {
-			lines << "SRT: " + stateText(status.srt, config.srtForm.type == StreamType::SrtListener);
+			lines << text("Outputs.State.Srt")
+					 .arg(stateText(status.srt, config.srtForm.type == StreamType::SrtListener));
 		}
-		QLabel *label = rows[(size_t)i].status;
+		Row &row = rows[(size_t)i];
+		QLabel *label = row.status;
 		label->setText(lines.join("\n"));
 		const bool red = status.srt.state == SenderState::Retrying || status.ndi.state == SenderState::Failed ||
 				 status.omt.state == SenderState::Failed;
-		label->setStyleSheet(red ? "color: #d00000;" : "");
+		if (red != row.red) {
+			row.red = red;
+			label->setStyleSheet(red ? "color: #d00000;" : "");
+		}
 	}
 }
 

@@ -56,6 +56,9 @@ StreamWindow::StreamWindow(QWidget *parent) : QDialog(parent)
 
 	connect(&timer, &QTimer::timeout, this, &StreamWindow::updateStatus);
 	timer.start(500);
+	for (int d = 0; d < DestinationCount; d++) {
+		rows[(size_t)d].lastBytes = OutputEngine::instance().destinationStatus(d).bytes;
+	}
 	updateStatus();
 }
 

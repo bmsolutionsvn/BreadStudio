@@ -188,15 +188,15 @@ void OutputEngine::startSenders(int output)
 			if (r.video) {
 				obs_encoder_set_video(r.video, video);
 			}
+			OBSDataAutoRelease audioSettings = obs_data_create();
+			obs_data_set_int(audioSettings, "bitrate", 160);
+			r.audio = obs_audio_encoder_create("ffmpeg_aac", (name + " audio").c_str(), audioSettings,
+							   (size_t)config.bus, nullptr);
+			if (r.audio) {
+				obs_encoder_set_audio(r.audio, obs_get_audio());
+			}
 		} else {
 			blog(LOG_WARNING, "[bread-desk] %s: no video encoder on this PC", name.c_str());
-		}
-		OBSDataAutoRelease audioSettings = obs_data_create();
-		obs_data_set_int(audioSettings, "bitrate", 160);
-		r.audio = obs_audio_encoder_create("ffmpeg_aac", (name + " audio").c_str(), audioSettings,
-						   (size_t)config.bus, nullptr);
-		if (r.audio) {
-			obs_encoder_set_audio(r.audio, obs_get_audio());
 		}
 	}
 
@@ -266,8 +266,11 @@ void OutputEngine::startDestination(int destination)
 	signal_handler_connect(obs_output_get_signal_handler(output), "stop", onRtmpStop,
 			       (void *)(uintptr_t)destination);
 	lastStop[(size_t)destination] = OBS_OUTPUT_SUCCESS;
-	obs_output_start(output);
 	rtmp[(size_t)destination] = std::move(output);
+	if (!obs_output_start(rtmp[(size_t)destination])) {
+		/* a synchronous failure would read "starting" forever; clear it so a reconcile retries */
+		stopDestination(destination);
+	}
 }
 
 void OutputEngine::stopDestination(int destination)
@@ -283,8 +286,13 @@ void OutputEngine::stopDestination(int destination)
 
 void OutputEngine::reconcile(const OutputsConfig &next, bool nextLive)
 {
+	detached = false;
+
 	obs_video_info ovi = {};
-	obs_get_video_info(&ovi);
+	if (!obs_get_video_info(&ovi)) {
+		blog(LOG_WARNING, "[bread-desk] no video information; leaving the outputs as they are");
+		return;
+	}
 	const int programWidth = (int)ovi.output_width;
 	const int programHeight = (int)ovi.output_height;
 

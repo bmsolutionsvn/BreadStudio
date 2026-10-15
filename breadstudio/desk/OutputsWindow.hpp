@@ -39,6 +39,7 @@ private:
 		QSpinBox *bitrate = nullptr;
 		QLabel *status = nullptr;
 		StreamForm srtForm;
+		bool red = false;
 	};
 
 	void addRow(int index);
