@@ -115,6 +115,10 @@ AVStream *addStream(AVFormatContext *context, obs_encoder_t *encoder)
 void sendUntilFailure(SrtOutput *s, AVFormatContext *context, AVStream *video, AVStream *audio)
 {
 	AVPacket *packet = av_packet_alloc();
+	if (!packet) {
+		blog(LOG_WARNING, "[bread-srt] '%s': cannot allocate a packet", obs_output_get_name(s->output));
+		return;
+	}
 	while (!s->stopping) {
 		Packet next;
 		{
@@ -199,6 +203,10 @@ void run(SrtOutput *s)
 				blog(LOG_WARNING, "[bread-srt] '%s': cannot open %s: %s",
 				     obs_output_get_name(s->output), s->url.c_str(), errorText(result).c_str());
 			}
+		} else if (!s->stopping) {
+			blog(LOG_WARNING,
+			     "[bread-srt] '%s': cannot add the video stream; the encoder's codec is unknown",
+			     obs_output_get_name(s->output));
 		}
 
 		if (context) {
@@ -258,6 +266,7 @@ bool srtStart(void *data)
 {
 	auto *s = static_cast<SrtOutput *>(data);
 
+	s->bytes = 0;
 	obs_data_t *settings = obs_output_get_settings(s->output);
 	s->url = obs_data_get_string(settings, "url");
 	s->options.clear();
