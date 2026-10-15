@@ -23,7 +23,7 @@
 
 #include "Ndi.hpp"
 
-#include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 
@@ -43,7 +43,7 @@ struct NdiOutput {
 	NDIlib_FourCC_video_type_e fourcc = NDIlib_FourCC_video_type_BGRA;
 	uint32_t sampleRate = 0;
 	size_t channels = 0;
-	bool started = false;
+	std::atomic<bool> started = false;
 	std::vector<uint8_t> audioBuffer; /* the planes, one channel after another, for FLTP */
 };
 

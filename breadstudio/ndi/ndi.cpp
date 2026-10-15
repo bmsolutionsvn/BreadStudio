@@ -30,6 +30,7 @@ std::string finderFile()
 
 void loadExtraIps()
 {
+	std::lock_guard lock(finderMutex);
 	obs_data_t *saved = obs_data_create_from_json_file_safe(finderFile().c_str(), "bak");
 	if (saved) {
 		extraIps = obs_data_get_string(saved, "extra_ips");
@@ -61,12 +62,12 @@ void setExtraIps(void *, calldata_t *data)
 {
 	const char *ips = calldata_string(data, "ips");
 	std::lock_guard lock(finderMutex);
-	extraIps = ips ? ips : "";
-	saveExtraIps();
 	if (finder && ndiLib) {
 		ndiLib->find_destroy(finder);
 	}
 	finder = nullptr;
+	extraIps = ips ? ips : "";
+	saveExtraIps();
 }
 
 /* why NDI is off, for the Outputs window's greyed NDI column */
