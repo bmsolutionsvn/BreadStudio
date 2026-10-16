@@ -14,11 +14,17 @@ std::array<SlotRect, MultiviewSlots> multiviewSlots(int width, int height)
 	slots[0] = {0, 0, leftW, topH};
 	slots[1] = {leftW, 0, width - leftW, topH};
 
-	/* the eight inputs: the bottom half, eight across, so no pixel is lost to rounding */
+	/* the eight inputs: the bottom half, two rows of four, so each box has the frame's own
+	 * shape and a picture of that shape fills it. Edges are by proportion, left to right and
+	 * top row first, so the boxes tile the bottom half exactly whatever the size. */
 	for (int i = 0; i < 8; i++) {
-		const int x0 = width * i / 8;
-		const int x1 = width * (i + 1) / 8;
-		slots[(size_t)(2 + i)] = {x0, bottomY, x1 - x0, bottomH};
+		const int col = i % 4;
+		const int row = i / 4;
+		const int x0 = width * col / 4;
+		const int x1 = width * (col + 1) / 4;
+		const int y0 = bottomY + bottomH * row / 2;
+		const int y1 = bottomY + bottomH * (row + 1) / 2;
+		slots[(size_t)(2 + i)] = {x0, y0, x1 - x0, y1 - y0};
 	}
 	return slots;
 }

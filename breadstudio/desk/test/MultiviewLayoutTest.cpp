@@ -26,7 +26,8 @@ static void covers(int width, int height)
 		CHECK(s.x >= 0 && s.y >= 0);
 		CHECK(s.x + s.w <= width);
 		CHECK(s.y + s.h <= height);
-		/* no empty slot; below width 8 an eight-across row cannot give every input a pixel */
+		/* no empty slot; at a tiny frame a row of four can round a slot away, so only insist
+		 * on a positive size once the frame is big enough to give every slot a pixel */
 		if (width >= 8 && height >= 2) {
 			CHECK(s.w > 0 && s.h > 0);
 		}
@@ -72,14 +73,33 @@ int main()
 		CHECK(slots[1].x == 960 && slots[1].y == 0 && slots[1].w == 960 && slots[1].h == 540);
 	}
 
-	/* the eight input slots run along the bottom, left to right */
+	/* the eight input slots are the bottom half in two rows of four, read left to right and top
+	 * row first: slot 2 is the top-left, slot 5 the top-right, slot 6 the bottom-left */
+	{
+		const int fw = 1920;
+		const int fh = 1080;
+		const std::array<SlotRect, MultiviewSlots> slots = multiviewSlots(fw, fh);
+		const int colW = 480;
+		const int rowH = 270;
+		for (int i = 0; i < 8; i++) {
+			const SlotRect &s = slots[(size_t)(2 + i)];
+			CHECK(s.w == colW);
+			CHECK(s.h == rowH);
+			CHECK(s.x == (i % 4) * colW);
+			CHECK(s.y == 540 + (i / 4) * rowH);
+			/* each box is the frame's own shape, which is the whole point of two-by-four */
+			CHECK(s.w * fh == s.h * fw);
+		}
+	}
+
+	/* the point of the change: a 16:9 picture fills a bottom box exactly, where an eight-across
+	 * 4:9 box could only ever letterbox it into a quarter of the box */
 	{
 		const std::array<SlotRect, MultiviewSlots> slots = multiviewSlots(1920, 1080);
-		for (int i = 0; i < 8; i++) {
-			CHECK(slots[(size_t)(2 + i)].y == 540);
-			CHECK(slots[(size_t)(2 + i)].h == 540);
-			CHECK(slots[(size_t)(2 + i)].w == 240);
-			CHECK(slots[(size_t)(2 + i)].x == i * 240);
+		for (int i = 2; i < MultiviewSlots; i++) {
+			const SlotRect &box = slots[(size_t)i];
+			const SlotRect fit = fitInside(box, 1920, 1080);
+			CHECK(fit.x == box.x && fit.y == box.y && fit.w == box.w && fit.h == box.h);
 		}
 	}
 
@@ -88,6 +108,7 @@ int main()
 	covers(1280, 720);
 	covers(3840, 2160);
 	covers(1000, 575);
+	covers(1921, 1081);
 	covers(7, 3);
 
 	/* a 16:9 picture in a tall 4:9 box keeps its shape: full width 240, letterboxed to height 135.

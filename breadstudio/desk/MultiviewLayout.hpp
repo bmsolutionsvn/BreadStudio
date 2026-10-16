@@ -4,8 +4,10 @@
 
 namespace desk {
 
-/* vMix's default layout (outputs spec §5): Preview and Program across the top half, eight input
- * slots along the bottom half. Slot 0 is Preview, slot 1 is Program, slots 2 to 9 are the inputs. */
+/* Preview and Program across the top half, the eight inputs along the bottom in two rows of
+ * four (vMix's default is one row of eight; two-by-four gives each box the frame's own shape,
+ * so a picture of that shape fills it). Slot 0 is Preview, slot 1 is Program, slots 2 to 9 are
+ * the inputs, read left to right and top row first. */
 inline constexpr int MultiviewSlots = 10;
 
 struct SlotRect {
