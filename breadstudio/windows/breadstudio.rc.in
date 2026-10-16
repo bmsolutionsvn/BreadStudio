@@ -1,0 +1,28 @@
+// Placeholder icon: the real BreadStudio mark is not designed yet. Replace
+// breadstudio/icons/breadstudio.ico (drawn by breadstudio/icons/make-icons.ps1) with it.
+IDI_ICON1 ICON DISCARDABLE "${CMAKE_SOURCE_DIR}/breadstudio/icons/breadstudio.ico"
+
+1 VERSIONINFO
+FILEVERSION ${OBS_VERSION_MAJOR},${OBS_VERSION_MINOR},${OBS_VERSION_PATCH},0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "BM Solutions"
+      VALUE "FileDescription", "BreadStudio"
+      VALUE "FileVersion", "${BREADSTUDIO_VERSION}"
+      VALUE "InternalName", "BreadStudio"
+      VALUE "OriginalFilename", "BreadStudio.exe"
+      VALUE "ProductName", "BreadStudio"
+      VALUE "ProductVersion", "${BREADSTUDIO_VERSION}"
+      VALUE "Comments", "Based on OBS Studio ${OBS_VERSION_CANONICAL}"
+      VALUE "LegalCopyright", "${OBS_LEGAL_COPYRIGHT}"
+    END
+  END
+
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 0x04B0
+  END
+END

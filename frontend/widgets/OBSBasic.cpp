@@ -18,6 +18,7 @@
 ******************************************************************************/
 
 #include "OBSBasic.hpp"
+#include <Branding.hpp>
 #include "ui-config.h"
 
 #include "ColorSelect.hpp"
@@ -254,6 +255,7 @@ OBSBasic::OBSBasic(QWidget *parent) : OBSMainWindow(parent), undo_s(ui), ui(new 
 	api = InitializeAPIInterface(this);
 
 	ui->setupUi(this);
+	BreadStudio::ApplyMainWindowBranding(this);
 	ui->previewDisabledWidget->setVisible(false);
 
 	/* Set up streaming connections */
@@ -2127,12 +2129,11 @@ void OBSBasic::UpdateTitleBar()
 	const char *profile = config_get_string(App()->GetUserConfig(), "Basic", "Profile");
 	const char *sceneCollection = config_get_string(App()->GetUserConfig(), "Basic", "SceneCollection");
 
-	name << "OBS ";
+	name << BreadStudio::kName << " " << BreadStudio::kVersion;
 	if (previewProgramMode) {
-		name << "Studio ";
+		name << " (Studio Mode)";
 	}
 
-	name << App()->GetVersionString(false);
 	if (safe_mode) {
 		name << " (" << Str("TitleBar.SafeMode") << ")";
 	}
