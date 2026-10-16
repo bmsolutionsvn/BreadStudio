@@ -18,4 +18,9 @@ struct SlotRect {
 /* The ten boxes for a frame that is `width` by `height`. They tile it exactly, whatever the size. */
 std::array<SlotRect, MultiviewSlots> multiviewSlots(int width, int height);
 
+/* The rectangle a `pw` by `ph` picture fills inside `box`, keeping its own aspect and centred -
+ * the whole picture, with letterbox or pillarbox margins, never stretched. An empty rectangle
+ * when the box or the picture has no size. */
+SlotRect fitInside(const SlotRect &box, int pw, int ph);
+
 } // namespace desk

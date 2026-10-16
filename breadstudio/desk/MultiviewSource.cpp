@@ -47,8 +47,9 @@ static void solidBox(float x, float y, float w, float h, uint32_t color)
 	gs_matrix_pop();
 }
 
-/* draws `picture` scaled to fill the box at (x, y) by (w, h), in the source's own coordinates */
-static void drawPicture(float x, float y, float w, float h, obs_source_t *picture)
+/* draws `picture` whole and centred in `box`, in the source's own coordinates: the fitted
+ * rectangle keeps the picture's own aspect, so it is letterboxed or pillarboxed, never stretched */
+static void drawPicture(const SlotRect &box, obs_source_t *picture)
 {
 	if (!picture) {
 		return;
@@ -58,9 +59,13 @@ static void drawPicture(float x, float y, float w, float h, obs_source_t *pictur
 	if (pw == 0 || ph == 0) {
 		return;
 	}
+	const SlotRect fit = fitInside(box, (int)pw, (int)ph);
+	if (fit.w == 0 || fit.h == 0) {
+		return;
+	}
 	gs_matrix_push();
-	gs_matrix_translate3f(x, y, 0.0f);
-	gs_matrix_scale3f(w / (float)pw, h / (float)ph, 1.0f);
+	gs_matrix_translate3f((float)fit.x, (float)fit.y, 0.0f);
+	gs_matrix_scale3f((float)fit.w / (float)pw, (float)fit.h / (float)ph, 1.0f);
 	obs_source_video_render(picture);
 	gs_matrix_pop();
 }
@@ -195,7 +200,7 @@ static void drawSlot(Multiview *mv, int slot, const SlotRect &box, obs_source_t 
 
 	solidBox((float)box.x, (float)box.y, (float)box.w, (float)box.h, frame);
 	solidBox(innerX, innerY, innerW, innerH, 0xFF000000u);
-	drawPicture(innerX, innerY, innerW, innerH, picture);
+	drawPicture({(int)innerX, (int)innerY, (int)innerW, (int)innerH}, picture);
 
 	obs_source_t *label = mv->labels[(size_t)slot];
 	if (!label) {
