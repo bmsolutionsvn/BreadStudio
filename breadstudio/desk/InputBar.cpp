@@ -121,6 +121,14 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	});
 	footer->addWidget(outputs);
 
+	/* OBS's Scene Transitions dock, which the desk does not use much (backlog B3): this
+	 * button is its pinned state, and DeskLayout places or hides the dock from it */
+	auto *transitions = new QPushButton(text("Transitions"), this);
+	transitions->setCheckable(true);
+	transitions->setChecked(transitionsPinned());
+	connect(transitions, &QPushButton::clicked, this, [](bool pinned) { setTransitionsPinned(pinned); });
+	footer->addWidget(transitions);
+
 	record = new QPushButton(text("Record"), this);
 	connect(record, &QPushButton::clicked, this, [] {
 		if (obs_frontend_recording_active()) {

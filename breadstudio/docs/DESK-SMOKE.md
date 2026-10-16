@@ -242,14 +242,17 @@ and an upstream rename breaks them silently.
 5. No OBS dock or plug-in dock is visible — Scenes, Sources, Audio Mixer,
    Controls and Stats included — and the Docks menu does not exist to bring
    them back.
-6. The desk's input bar and Mixer docks are visible, and OBS's Scene Transitions
-   dock is visible beside them.
+6. The desk's input bar and Mixer docks are visible; the Scene Transitions dock is
+   not shown unless the footer's Transitions button pins it.
 7. A desk dock can be dragged out to float on a second monitor, and has no close
    button; Scene Transitions has none either.
 8. Settings… opens and every page of it works.
 9. An input's properties and its filters open from the desk.
 10. A search for `was not found` in the newest log under
     `%APPDATA%\obs-studio\logs` finds nothing.
+11. The footer's **Transitions** button is unchecked and OBS's Scene Transitions
+    dock is not shown; pressing it pins the dock beside the mixer, and either
+    choice survives a restart.
 
 ## Before a run
 

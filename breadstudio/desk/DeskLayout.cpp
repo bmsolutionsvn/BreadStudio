@@ -18,7 +18,7 @@ namespace desk {
 
 /* Bump when a change to applyLayout() must reach installs that already ran it: an install
  * whose stored version is below this applies the layout again once. */
-constexpr int LayoutVersion = 2;
+constexpr int LayoutVersion = 3;
 
 bool applyLayout()
 {
@@ -58,20 +58,46 @@ bool applyLayout()
 		toolbar->setVisible(false);
 	}
 
-	/* as vMix: the input bar on the left, the mixer docked to its right, then OBS's Scene
-	 * Transitions (the transition and its duration are chosen there) */
-	for (QDockWidget *dock : {inputs, mixer, transitions}) {
+	/* as vMix: the input bar on the left and the mixer docked to its right. OBS's Scene
+	 * Transitions (the transition and its duration are chosen there) is placed only while it
+	 * is pinned (backlog B3); otherwise it is hidden and the layout is not shaped for it. */
+	for (QDockWidget *dock : {inputs, mixer}) {
 		dock->setFloating(false);
 		main->addDockWidget(Qt::BottomDockWidgetArea, dock);
 		dock->setVisible(true);
 	}
-
 	main->splitDockWidget(inputs, mixer, Qt::Horizontal);
-	main->splitDockWidget(mixer, transitions, Qt::Horizontal);
-	main->resizeDocks({inputs, mixer, transitions}, {900, 420, 160}, Qt::Horizontal);
+
+	applyTransitionsPin();
 	main->resizeDocks({inputs}, {320}, Qt::Vertical);
 
 	return true;
+}
+
+void applyTransitionsPin()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	QDockWidget *transitions = main ? main->findChild<QDockWidget *>("transitionsDock") : nullptr;
+	QDockWidget *inputs = main ? main->findChild<QDockWidget *>(InputsDockId) : nullptr;
+	QDockWidget *mixer = main ? main->findChild<QDockWidget *>(MixerDockId) : nullptr;
+	if (!transitions || !inputs || !mixer) {
+		blog(LOG_WARNING,
+		     "[bread-desk] a dock the transitions pin needs was not found; the pin was not applied");
+		return;
+	}
+
+	if (!transitionsPinned()) {
+		transitions->hide();
+		main->resizeDocks({inputs, mixer}, {900, 420}, Qt::Horizontal);
+		return;
+	}
+
+	/* the bottom area, split to the right of the mixer, at the width applyLayout gives it */
+	transitions->setFloating(false);
+	main->addDockWidget(Qt::BottomDockWidgetArea, transitions);
+	main->splitDockWidget(mixer, transitions, Qt::Horizontal);
+	transitions->setVisible(true);
+	main->resizeDocks({inputs, mixer, transitions}, {900, 420, 160}, Qt::Horizontal);
 }
 
 void applyLayoutOnFirstRun()
@@ -85,6 +111,32 @@ void applyLayoutOnFirstRun()
 		config_set_int(config, "BreadDesk", "LayoutVersion", LayoutVersion);
 		config_save_safe(config, "tmp", nullptr);
 	}
+}
+
+bool transitionsPinned()
+{
+	config_t *config = obs_frontend_get_user_config();
+	return config && config_get_bool(config, "BreadDesk", "TransitionsPinned");
+}
+
+void setTransitionsPinned(bool pinned)
+{
+	/* save only once the dock the setting is about exists, so a missing dock cannot leave a
+	 * "pinned" flag stored with nothing pinned */
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main || !main->findChild<QDockWidget *>("transitionsDock")) {
+		blog(LOG_WARNING,
+		     "[bread-desk] dock 'transitionsDock' was not found; the pinned state was not applied");
+		return;
+	}
+
+	config_t *config = obs_frontend_get_user_config();
+	if (config) {
+		config_set_bool(config, "BreadDesk", "TransitionsPinned", pinned);
+		config_save_safe(config, "tmp", nullptr);
+	}
+
+	applyTransitionsPin();
 }
 
 void hideObsStreamButton()

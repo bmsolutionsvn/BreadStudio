@@ -114,6 +114,9 @@ static void onEvent(enum obs_frontend_event event, void *)
 		applyLayoutOnFirstRun();
 		hideObsStreamButton();
 		applyChrome();
+		/* last word on the Scene Transitions dock, after OBS restored its own dock state
+		 * and the chrome sweep ran, so the stored pin always wins (backlog B3) */
+		applyTransitionsPin();
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
 		load();
