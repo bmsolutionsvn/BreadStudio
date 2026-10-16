@@ -191,26 +191,29 @@ Tasks 4 to 6.
 Spec: `2026-10-16-breadstudio-input-settings-design.md`. Aspect Ratio is never
 shown — OBS has no such source property.
 
-1. The gear opens a window titled `Input: N <name>` (N the input's place in the
+1. In an input's settings, the General page's Source row shows the input's source, and
+   its **Change…** opens the desk's picker for that kind; changing it there points the
+   input at the other source and the input keeps its name, layers, levels and AFV.
+2. The gear opens a window titled `Input: N <name>` (N the input's place in the
    bar) with the General page shown. The page list is exactly the pages that
    input's type backs: General and Position for every input, each colour/effect
    page whose filter OBS has registered, Layers / MultiView and Triggers for the
    desk, and Advanced. A page with nothing behind it is not listed.
-2. Rename, Category, AFV and Mouse Click Action each take effect — the name on
+3. Rename, Category, AFV and Mouse Click Action each take effect — the name on
    the tile, the category tint on the tile and the MultiView slot, AFV on the
    mixer strip and the tile, and the click action on what a tile click does — and
    each survives closing and reopening the window.
-3. Each colour/effect page (Colour Adjust, Colour Key, Colour Correction,
+4. Each colour/effect page (Colour Adjust, Colour Key, Colour Correction,
    Effects) adds, configures and removes its filter on the base, and the picture
    changes live.
-4. Position moves the base within its own input (X/Y/scale/rotation/crop); Layers
+5. Position moves the base within its own input (X/Y/scale/rotation/crop); Layers
    / MultiView lists the layers with hidden/shown, up/down and remove, and its
    small live view follows what the MultiView draws.
-5. A trigger (on Program → Start recording) fires when the input becomes Program,
+6. A trigger (on Program → Start recording) fires when the input becomes Program,
    and does not fire on starting OBS or loading a collection.
-6. `Copy From…` copies the desk settings (AFV, category, mouse-click action, the
+7. `Copy From…` copies the desk settings (AFV, category, mouse-click action, the
    automatic behaviours) from another input.
-7. A base whose type has no deinterlacing control shows none.
+8. A base whose type has no deinterlacing control shows none.
 
 ## J. OBS's surface is hidden
 

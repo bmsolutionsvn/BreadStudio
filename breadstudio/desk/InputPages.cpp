@@ -3,6 +3,7 @@
 #include "AudioBed.hpp"
 #include "Desk.hpp"
 #include "InputModel.hpp"
+#include "InputSelect.hpp"
 #include "TileDisplay.hpp"
 
 #include <obs-frontend-api.h>
@@ -148,6 +149,30 @@ QWidget *makeGeneral(obs_source_t *input)
 		}
 	});
 	form->addRow(text("Settings.Name"), name);
+
+	/* the base this input shows, and vMix's Change: opens the desk's picker for the base's kind,
+	 * which points the input at another source while its name, layers, levels and AFV stay as
+	 * they are (owner's backlog B4). InputSelect's ctor for an existing input does the work. */
+	auto *source = new QWidget(page);
+	auto *sourceRow = new QHBoxLayout(source);
+	sourceRow->setContentsMargins(0, 0, 0, 0);
+	auto *sourceName = new QLabel(QString::fromUtf8(obs_source_get_name(base)), source);
+	sourceName->setToolTip(sourceName->text());
+	sourceRow->addWidget(sourceName, 1);
+	auto *change = new QPushButton(text("Settings.ChangeSource"), source);
+	QObject::connect(change, &QPushButton::clicked, page, [input, page] {
+		for (InputSelect *open : page->window()->findChildren<InputSelect *>()) {
+			open->raise();
+			open->activateWindow();
+			return;
+		}
+		auto *window = new InputSelect(input, page->window());
+		window->setAttribute(Qt::WA_DeleteOnClose);
+		QObject::connect(window, &QDialog::accepted, page, [] { inputsChanged(); });
+		window->open();
+	});
+	sourceRow->addWidget(change);
+	form->addRow(text("Settings.Source"), source);
 
 	/* Aspect Ratio is not an OBS source property, so it is not shown; Deinterlacing is a
 	 * source-level setting, shown for the types OBS offers it on (spec §3.2) */
