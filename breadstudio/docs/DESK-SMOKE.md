@@ -219,6 +219,10 @@ shown — OBS has no such source property.
 7. `Copy From…` copies the desk settings (AFV, category, mouse-click action, the
    automatic behaviours) from another input.
 8. A base whose type has no deinterlacing control shows none.
+9. Removing a layer asks for no confirmation, and the **Undo** button beside Remove / Up /
+   Down puts it back exactly as it was — the same place in the list, the same on/off tick and
+   the same picture geometry — and then greys out again. Up, Down or another remove clears it,
+   so Undo never puts a layer into a slot that has since changed.
 
 ## J. OBS's surface is hidden
 

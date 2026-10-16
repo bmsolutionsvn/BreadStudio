@@ -107,7 +107,23 @@ struct Layer {
 /* every item above the base, top first */
 std::vector<Layer> layers(obs_source_t *input);
 
-void removeLayer(obs_source_t *host, int64_t id);
+/* a layer that was removed, and everything needed to put it back exactly as it was */
+struct RemovedLayer {
+	OBSSource source; /* the input the layer showed, held so it cannot go while the undo waits */
+	int index = 0;    /* its position in the host's item list, the base at the bottom */
+	bool visible = true;
+	struct obs_transform_info info = {};
+	struct obs_sceneitem_crop crop = {};
+};
+
+/* removes the layer `id` from `host` and returns what it takes to put it back; `source` is null
+ * when there was no such layer */
+RemovedLayer removeLayer(obs_source_t *host, int64_t id);
+
+/* puts `removed` back at its old index, with its old geometry and tick; false when it could not
+ * be added (the source is gone, or the list no longer has room) */
+bool restoreLayer(obs_source_t *host, const RemovedLayer &removed);
+
 void moveLayer(obs_source_t *host, int64_t id, bool up); /* never below the base */
 void setLayerVisible(obs_source_t *host, int64_t id, bool visible);
 

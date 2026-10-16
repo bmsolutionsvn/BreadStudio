@@ -632,11 +632,60 @@ static obs_sceneitem_t *findLayer(obs_source_t *host, int64_t id)
 	return obs_scene_find_sceneitem_by_id(obs_scene_from_source(host), id);
 }
 
-void removeLayer(obs_source_t *host, int64_t id)
+RemovedLayer removeLayer(obs_source_t *host, int64_t id)
 {
-	if (obs_sceneitem_t *item = findLayer(host, id)) {
-		obs_sceneitem_remove(item);
+	RemovedLayer removed;
+
+	obs_sceneitem_t *item = findLayer(host, id);
+	if (!item) {
+		return removed;
 	}
+
+	/* the source is held and the state read before the item goes: the item's own reference to
+	 * the source is the only thing keeping it alive otherwise */
+	removed.source = obs_sceneitem_get_source(item);
+	removed.index = obs_sceneitem_get_order_position(item);
+	removed.visible = obs_sceneitem_visible(item);
+	obs_sceneitem_get_info2(item, &removed.info);
+	obs_sceneitem_get_crop(item, &removed.crop);
+
+	obs_sceneitem_remove(item);
+	return removed;
+}
+
+bool restoreLayer(obs_source_t *host, const RemovedLayer &removed)
+{
+	obs_scene_t *scene = obs_scene_from_source(host);
+	if (!scene) {
+		blog(LOG_WARNING, "[bread-desk] the scene to put a layer back into is gone; the undo did nothing");
+		return false;
+	}
+	if (!removed.source) {
+		blog(LOG_WARNING, "[bread-desk] the layer's source is gone; the undo did nothing");
+		return false;
+	}
+
+	obs_sceneitem_t *item = obs_scene_add(scene, removed.source.Get());
+	if (!item) {
+		blog(LOG_WARNING, "[bread-desk] the layer could not be added back to its scene; the undo did nothing");
+		return false;
+	}
+
+	obs_sceneitem_set_info2(item, &removed.info);
+	obs_sceneitem_set_crop(item, &removed.crop);
+	obs_sceneitem_set_visible(item, removed.visible);
+	obs_sceneitem_set_order_position(item, removed.index);
+
+	/* the old slot is taken again when the item comes back where it was; a list that has since
+	 * lost items clamps it to the top instead, so undo the add and report that it could not
+	 * be put back exactly */
+	if (obs_sceneitem_get_order_position(item) != removed.index) {
+		obs_sceneitem_remove(item);
+		blog(LOG_WARNING, "[bread-desk] the layer's old place in the list is gone; the undo was abandoned");
+		return false;
+	}
+
+	return true;
 }
 
 void setLayerVisible(obs_source_t *host, int64_t id, bool visible)

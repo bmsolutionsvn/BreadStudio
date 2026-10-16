@@ -624,7 +624,10 @@ public:
 		buttons->addWidget(up);
 		auto *down = new QPushButton(text("Settings.Down"), this);
 		buttons->addWidget(down);
+		undo = new QPushButton(text("Settings.Undo"), this);
+		buttons->addWidget(undo);
 		buttons->addStretch(1);
+		undo->setEnabled(false);
 
 		outer->addWidget(new QLabel(text("Settings.Hint"), this));
 
@@ -640,7 +643,13 @@ public:
 			}
 		});
 		QObject::connect(remove, &QPushButton::clicked, this, [this] {
-			removeLayer(input, selected());
+			const RemovedLayer taken = removeLayer(input, selected());
+			refresh(); /* clears any earlier removal and redraws */
+			removed = taken;
+			undo->setEnabled(removed.source != nullptr);
+		});
+		QObject::connect(undo, &QPushButton::clicked, this, [this] {
+			restoreLayer(input, removed);
 			refresh();
 		});
 		QObject::connect(up, &QPushButton::clicked, this, [this] {
@@ -707,11 +716,18 @@ private:
 			}
 		}
 		loading = false;
+
+		/* the list is rebuilt from the scene, so a removal captured before now no longer lines
+		 * up with it: drop it, and Undo stays grey until the next removal */
+		removed = RemovedLayer();
+		undo->setEnabled(false);
 	}
 
 	OBSSource input;
 	QListWidget *list = nullptr;
 	TileDisplay *view = nullptr;
+	QPushButton *undo = nullptr;
+	RemovedLayer removed; /* the most recent removal, so Undo can put it back */
 	bool loading = false;
 };
 
