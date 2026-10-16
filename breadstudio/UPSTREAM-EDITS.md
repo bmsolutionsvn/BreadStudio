@@ -10,6 +10,7 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 ## Edited
 
 - `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
+- `CMakePresets.json` - the windows-x64 preset uses the Visual Studio 17 2022 generator, because the build machine has VS 2022 and not VS 2026
 - `plugins/CMakeLists.txt` - four lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi and breadstudio/srt to the build
 - `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is
 - `frontend/CMakeLists.txt` - program file is BreadStudio.exe; includes breadstudio/cmake/frontend.cmake
@@ -22,5 +23,6 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 - `frontend/forms/images/obs.png` - placeholder BreadStudio mark; written by breadstudio/icons/make-icons.ps1
 - `frontend/forms/images/obs_paused.png` - placeholder mark with the paused dot; same script
 - `frontend/forms/images/tray_active.png` - placeholder mark with the live dot; same script
+- `README.rst` - rewritten to describe BreadStudio instead of OBS Studio
 
 ## Added outside breadstudio/
