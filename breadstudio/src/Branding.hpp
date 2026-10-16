@@ -4,8 +4,6 @@
 
 #include <string>
 
-class QMainWindow;
-
 namespace BreadStudio {
 
 inline constexpr const char *kName = "BreadStudio";
@@ -23,9 +21,5 @@ QString DisplayVersion();
 
 /* Text of the About tab. */
 QString AboutHtml();
-
-/* Hides the menu entries that lead to OBS's servers and volunteer support,
- * and adds a link to the Bread website at the top of the Help menu. */
-void ApplyMainWindowBranding(QMainWindow *window);
 
 } // namespace BreadStudio

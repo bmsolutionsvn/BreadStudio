@@ -186,6 +186,29 @@ QMenu *obsMainMenu()
 			     "[bread-desk] the Multiview projector menu was not found; the projector is not offered");
 		}
 
+		/* Help is dropped, so OBS's About — and the licence and authors notices it
+		 * opens — would be unreachable. File is where Windows apps put About, so
+		 * re-home OBS's action there, after Settings and before Exit. OBS keeps
+		 * owning the action and its slot. */
+		if (QMenu *file = main->findChild<QMenu *>("menu_File")) {
+			QAction *about = main->findChild<QAction *>("actionShowAbout");
+			if (about) {
+				/* insert before the last separator so Exit stays last */
+				QAction *before = nullptr;
+				for (QAction *item : file->actions()) {
+					if (item->isSeparator()) {
+						before = item;
+					}
+				}
+				file->insertAction(before, about);
+			} else {
+				blog(LOG_WARNING,
+				     "[bread-desk] OBS's About action was not found; About is not offered");
+			}
+		} else {
+			blog(LOG_WARNING, "[bread-desk] the File menu was not found; About is not offered");
+		}
+
 		bar->setVisible(false);
 	}
 	return popup;

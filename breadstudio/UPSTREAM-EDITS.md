@@ -13,7 +13,7 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 - `plugins/CMakeLists.txt` - four lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi and breadstudio/srt to the build
 - `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is
 - `frontend/CMakeLists.txt` - program file is BreadStudio.exe; includes breadstudio/cmake/frontend.cmake
-- `frontend/widgets/OBSBasic.cpp` - calls ApplyMainWindowBranding; window title shows BreadStudio and its version
+- `frontend/widgets/OBSBasic.cpp` - window title shows BreadStudio and its version
 - `frontend/widgets/OBSBasic_SysTray.cpp` - tray tooltip and notification title
 - `frontend/dialogs/OBSAbout.cpp` - name, "based on OBS Studio" version line, About text; no request to obsproject.com
 

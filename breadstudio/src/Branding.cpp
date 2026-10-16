@@ -2,12 +2,6 @@
 
 #include <obs.h>
 
-#include <QAction>
-#include <QDesktopServices>
-#include <QMainWindow>
-#include <QMenu>
-#include <QUrl>
-
 namespace BreadStudio {
 
 std::string ConfigSubPath(const char *name)
@@ -38,38 +32,6 @@ QString AboutHtml()
 			      "Source code: <a href=\"%3\">%3</a></p>")
 		.arg(QString::fromUtf8(kName), QString::fromUtf8(obs_get_version_string()),
 		     QString::fromUtf8(kSourceUrl));
-}
-
-void ApplyMainWindowBranding(QMainWindow *window)
-{
-	/* Object names from frontend/forms/OBSBasic.ui. */
-	static const char *const hidden[] = {
-		"actionHelpPortal",
-		"actionWebsite",
-		"actionDiscord",
-		"actionReleaseNotes",
-		"actionUploadCurrentLog",
-		"actionUploadLastLog",
-		"actionUploadLastCrashLog",
-		"actionCheckForUpdates",
-		"actionRepair",
-	};
-
-	for (const char *name : hidden) {
-		if (QAction *action = window->findChild<QAction *>(QString::fromUtf8(name))) {
-			action->setVisible(false);
-		}
-	}
-
-	QMenu *help = window->findChild<QMenu *>(QStringLiteral("menuBasic_MainMenu_Help"));
-	if (!help) {
-		return;
-	}
-
-	QAction *website = new QAction(QStringLiteral("bmsolutions.vn"), help);
-	QObject::connect(website, &QAction::triggered, help,
-			 [] { QDesktopServices::openUrl(QUrl(QString::fromUtf8(kWebsite))); });
-	help->insertAction(help->actions().value(0), website);
 }
 
 } // namespace BreadStudio

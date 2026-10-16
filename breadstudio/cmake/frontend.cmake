@@ -2,6 +2,12 @@
 
 file(STRINGS "${CMAKE_SOURCE_DIR}/breadstudio/VERSION" BREADSTUDIO_VERSION LIMIT_COUNT 1)
 
+# The Windows FILEVERSION is numeric (a,b,c,0); ProductVersion/FileVersion stay the string.
+string(REPLACE "." ";" BreadStudio_VERSION_LIST "${BREADSTUDIO_VERSION}")
+list(GET BreadStudio_VERSION_LIST 0 BREADSTUDIO_VERSION_MAJOR)
+list(GET BreadStudio_VERSION_LIST 1 BREADSTUDIO_VERSION_MINOR)
+list(GET BreadStudio_VERSION_LIST 2 BREADSTUDIO_VERSION_PATCH)
+
 target_sources(
   obs-studio
   PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/src/Branding.cpp" "${CMAKE_SOURCE_DIR}/breadstudio/src/Branding.hpp"

@@ -1,9 +1,10 @@
-// Placeholder icon: the real BreadStudio mark is not designed yet. Replace
-// breadstudio/icons/breadstudio.ico (drawn by breadstudio/icons/make-icons.ps1) with it.
+// Placeholder icon: the real BreadStudio mark is not designed yet. To swap it, edit the
+// drawing in breadstudio/icons/make-icons.ps1 and re-run it; it regenerates this .ico and
+// the three PNGs the window, tray and About load from frontend/forms/images/.
 IDI_ICON1 ICON DISCARDABLE "${CMAKE_SOURCE_DIR}/breadstudio/icons/breadstudio.ico"
 
 1 VERSIONINFO
-FILEVERSION ${OBS_VERSION_MAJOR},${OBS_VERSION_MINOR},${OBS_VERSION_PATCH},0
+FILEVERSION ${BREADSTUDIO_VERSION_MAJOR},${BREADSTUDIO_VERSION_MINOR},${BREADSTUDIO_VERSION_PATCH},0
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN

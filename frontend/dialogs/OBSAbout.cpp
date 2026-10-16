@@ -2,15 +2,10 @@
 #include <Branding.hpp>
 
 #include <widgets/OBSBasic.hpp>
-#include <utility/RemoteTextThread.hpp>
 
 #include <qt-wrappers.hpp>
 
-#include <json11.hpp>
-
 #include "moc_OBSAbout.cpp"
-
-using namespace json11;
 
 extern bool steam;
 

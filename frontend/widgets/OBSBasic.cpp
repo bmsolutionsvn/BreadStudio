@@ -255,7 +255,6 @@ OBSBasic::OBSBasic(QWidget *parent) : OBSMainWindow(parent), undo_s(ui), ui(new 
 	api = InitializeAPIInterface(this);
 
 	ui->setupUi(this);
-	BreadStudio::ApplyMainWindowBranding(this);
 	ui->previewDisabledWidget->setVisible(false);
 
 	/* Set up streaming connections */
