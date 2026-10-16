@@ -297,7 +297,7 @@ The audio bed is not saved. It is rebuilt from the AFV flags after each load.
 | Case | Behaviour |
 |---|---|
 | Studio Mode is switched off by hand | The input bar shows a warning that a click now cuts straight to Program, with a button that switches Studio Mode back on. |
-| Deleting an input that is on Program, directly or as a layer of what is on Program | Refused. |
+| Deleting an input that is on Program, directly or as a layer of what is on Program | Allowed. An input that is the Program scene is sent to Preview and the first other input goes on Program and Preview, so the show never goes black; an input that is only a layer of the Program scene is removed with its layers and the shot stays up (owner's backlog B2). |
 | A layer that would make a loop | Refused, with the reason. |
 | A camera is unplugged | Its tile goes black, as in OBS. Nothing else changes. |
 | The scene collection is switched | The bar, the mixer and the bed are rebuilt. Every reference the desk holds is released first, so OBS can unload the collection and close cleanly. |

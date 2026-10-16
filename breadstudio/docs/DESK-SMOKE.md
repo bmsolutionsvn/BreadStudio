@@ -4,6 +4,9 @@ Run on an installed build before a release and after every upstream merge.
 Needs two cameras, a media file, a microphone and a second monitor.
 Spec: `2026-10-13-breadstudio-s1-desk-design.md`.
 
+A new check is appended to the end of its section, never inserted, so the
+numbers cited in the Runs log below stay true.
+
 ## A. The show (spec §1.1)
 
 Start from a first run (no settings folder).
@@ -32,7 +35,7 @@ Start from a first run (no settings folder).
 1. Studio Mode off: the warning row shows, and its button switches Studio
    Mode back on.
 2. Delete the input on Program, and an input that is a layer of what is on
-   Program: both refused.
+   Program: both allowed.
 3. Add an input as a layer of one of its own layers: refused.
 4. Unplug a camera: its tile goes black; nothing else changes. Plug it back:
    the picture returns.
@@ -45,6 +48,8 @@ Start from a first run (no settings folder).
 7. Bind "Input 2 to Preview": it follows whatever is in place 2.
 8. Press Cut on a tile during a three-second fade: ignored; the selected
    transition is unchanged afterwards.
+9. Closing an input that is on Program puts the first other input on Program
+   and Preview and removes the input, and the show never goes black.
 
 ## C. Things found by name (spec §6.2): check after every upstream merge
 

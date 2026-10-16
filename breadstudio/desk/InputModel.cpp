@@ -465,16 +465,10 @@ bool renameInput(obs_source_t *input, const char *name)
 	return true;
 }
 
-DeleteCheck canDelete(obs_source_t *input)
+DeleteCheck canDelete(obs_source_t *)
 {
 	if (inputs().size() <= 1) {
 		return DeleteCheck::LastInput;
-	}
-
-	/* on Program directly, or as a layer of what is on Program (spec §8) */
-	OBSSourceAutoRelease program = obs_frontend_get_current_scene();
-	if (program && reaches(graph(), uuidOf(program), uuidOf(input))) {
-		return DeleteCheck::OnProgram;
 	}
 
 	return DeleteCheck::Ok;
@@ -492,8 +486,50 @@ int layerUseCount(obs_source_t *input)
 	return hosts;
 }
 
+/* the first input in bar order that is not `input`, so closing one can put another on Program;
+ * null when nothing else is left */
+static OBSSource firstOtherInput(obs_source_t *input)
+{
+	for (OBSSource &other : inputs()) {
+		if (other.Get() != input) {
+			return other;
+		}
+	}
+	return OBSSource();
+}
+
 void deleteInput(obs_source_t *input)
 {
+	OBSSourceAutoRelease current = obs_frontend_get_current_transition();
+	if (current && obs_transition_is_active(current)) {
+		blog(LOG_WARNING, "[bread-desk] a transition is running; the input was not deleted");
+		return;
+	}
+
+	/* vMix's rule (owner's backlog B2): closing an input that is on air must not leave Program
+	 * without a picture. An input that is the Program scene is first sent to Preview (in Studio
+	 * Mode through the Preview scene, so Program and Preview then both hold it) and Program moves
+	 * to the first input that is not this one; Preview follows it, so nothing is left pointing at
+	 * what is going. An input that is only a layer of the Program scene is left to the ordinary
+	 * path below: removing its uses is enough, and the shot stays up. toPreview(input) must run
+	 * before Program is set: it makes the input OBS's current scene, which is what stops OBS
+	 * queueing its Preview/Program swap. */
+	OBSSource other = firstOtherInput(input);
+	if (other) {
+		OBSSourceAutoRelease program = obs_frontend_get_current_scene();
+		const bool onProgram = program.Get() == input;
+		OBSSourceAutoRelease preview = obs_frontend_get_current_preview_scene();
+		const bool onPreview = preview.Get() == input;
+
+		if (onProgram) {
+			toPreview(input);
+			obs_frontend_set_current_scene(other);
+		}
+		if ((onProgram || onPreview) && obs_frontend_preview_program_mode_active()) {
+			obs_frontend_set_current_preview_scene(other);
+		}
+	}
+
 	struct Hits {
 		obs_source_t *target;
 		std::vector<OBSSceneItem> items;

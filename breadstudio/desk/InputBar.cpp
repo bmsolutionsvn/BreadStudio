@@ -326,7 +326,7 @@ QWidget *InputBar::makeFooter(int index)
 	buttons->setContentsMargins(0, 2, 0, 2);
 	buttons->setSpacing(2);
 
-	/* Close asks first, and is refused for an input on Program (spec §8) */
+	/* Close asks first, and is refused only for the last input (spec §8) */
 	auto *close = new QToolButton(footer);
 	close->setText(text("Close"));
 	connect(close, &QToolButton::clicked, this, [this, index] {
@@ -503,10 +503,13 @@ void InputBar::renameDialog(obs_source_t *input)
 
 void InputBar::deleteDialog(obs_source_t *input)
 {
-	switch (canDelete(input)) {
-	case DeleteCheck::OnProgram:
-		QMessageBox::warning(window(), text("Delete"), text("Delete.OnProgram"));
+	OBSSourceAutoRelease current = obs_frontend_get_current_transition();
+	if (current && obs_transition_is_active(current)) {
+		QMessageBox::warning(window(), text("Delete"), text("Delete.Transitioning"));
 		return;
+	}
+
+	switch (canDelete(input)) {
 	case DeleteCheck::LastInput:
 		QMessageBox::warning(window(), text("Delete"), text("Delete.Last"));
 		return;

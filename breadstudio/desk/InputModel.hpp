@@ -84,7 +84,7 @@ OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *s
 /* false when the name is empty or already used by any source */
 bool renameInput(obs_source_t *input, const char *name);
 
-enum class DeleteCheck { Ok, OnProgram, LastInput };
+enum class DeleteCheck { Ok, LastInput };
 DeleteCheck canDelete(obs_source_t *input);
 
 /* how many other inputs hold this one as a layer */
