@@ -12,6 +12,11 @@ bool applyLayout();
 /* applyLayout when the desk's layout version is newer than the one stored in the config */
 void applyLayoutOnFirstRun();
 
+/* The desk is OBS's Studio Mode: it is switched on at every load, not only when the layout is
+ * applied, because the whole desk - Preview, Program, Cut, the tally - needs it (S1 §4.1). Turns
+ * it on when it is off; does nothing when it is already on. */
+void ensureStudioMode();
+
 /* Whether OBS's Scene Transitions dock is pinned into the desk layout (backlog B3): the desk's
  * footer button reads and sets it, and applyLayout places the dock only while it is set. Stored
  * in the user config's BreadDesk section; the default is off, so the dock starts hidden. */

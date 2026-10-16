@@ -113,6 +113,15 @@ void applyLayoutOnFirstRun()
 	}
 }
 
+void ensureStudioMode()
+{
+	if (obs_frontend_preview_program_mode_active()) {
+		return;
+	}
+
+	obs_frontend_set_preview_program_mode(true);
+}
+
 bool transitionsPinned()
 {
 	config_t *config = obs_frontend_get_user_config();
