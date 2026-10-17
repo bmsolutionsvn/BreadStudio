@@ -112,6 +112,9 @@ static void onEvent(enum obs_frontend_event event, void *)
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
 		load();
 		applyLayoutOnFirstRun();
+		/* the desk cannot work without its own two docks, and applyLayout places them only
+		 * once per layout version, so they are put back at every load */
+		ensureDeskDocks();
 		/* the desk cannot work without Studio Mode, and OBS stores it off, so it is put on
 		 * here at every load - not only when the layout is applied (S1 §4.1). A no-op when
 		 * applyLayout already switched it on. */

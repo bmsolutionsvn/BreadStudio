@@ -113,6 +113,49 @@ void applyLayoutOnFirstRun()
 	}
 }
 
+void ensureDeskDocks()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main) {
+		return;
+	}
+
+	auto find = [main](const char *name) {
+		auto *dock = main->findChild<QDockWidget *>(name);
+		if (!dock) {
+			blog(LOG_WARNING, "[bread-desk] dock '%s' was not found; the desk docks were not ensured",
+			     name);
+		}
+		return dock;
+	};
+
+	QDockWidget *inputs = find(InputsDockId);
+	QDockWidget *mixer = find(MixerDockId);
+	if (!inputs || !mixer) {
+		return;
+	}
+
+	/* an operator's arrangement - both docks docked and visible - is left alone, so its
+	 * splitting and sizes survive; only a dock that was lost is put back */
+	bool placed = false;
+	for (QDockWidget *dock : {inputs, mixer}) {
+		if (dock->isVisible() && !dock->isFloating()) {
+			continue;
+		}
+		dock->setFloating(false);
+		main->addDockWidget(Qt::BottomDockWidgetArea, dock);
+		dock->setVisible(true);
+		placed = true;
+	}
+	if (!placed) {
+		return;
+	}
+
+	main->splitDockWidget(inputs, mixer, Qt::Horizontal);
+	main->resizeDocks({inputs, mixer}, {900, 420}, Qt::Horizontal);
+	main->resizeDocks({inputs}, {320}, Qt::Vertical);
+}
+
 void ensureStudioMode()
 {
 	if (obs_frontend_preview_program_mode_active()) {

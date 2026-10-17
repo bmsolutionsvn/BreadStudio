@@ -12,6 +12,12 @@ bool applyLayout();
 /* applyLayout when the desk's layout version is newer than the one stored in the config */
 void applyLayoutOnFirstRun();
 
+/* The desk cannot work without its own two docks, and they are only placed by applyLayout, which
+ * runs once per LayoutVersion - so a crash after that version is stored, or a dock the operator
+ * lost, leaves the desk with no input bar and no way to get it back (the Docks menu is hidden).
+ * This puts them back at every load, and does nothing when they are already docked and visible. */
+void ensureDeskDocks();
+
 /* The desk is OBS's Studio Mode: it is switched on at every load, not only when the layout is
  * applied, because the whole desk - Preview, Program, Cut, the tally - needs it (S1 §4.1). Turns
  * it on when it is off; does nothing when it is already on. */
