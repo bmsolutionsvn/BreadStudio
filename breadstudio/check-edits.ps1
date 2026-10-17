@@ -21,8 +21,17 @@ if ($LASTEXITCODE -ne 0) {
 $listed = @(Get-Content (Join-Path $RepoRoot 'breadstudio/UPSTREAM-EDITS.md') |
         ForEach-Object { if ($_ -match '^- `([^`]+)`') { $Matches[1] } })
 
-$unlisted = @($changed | Where-Object { $listed -notcontains $_ })
-$stale = @($listed | Where-Object { $changed -notcontains $_ })
+# An entry names a file, or a whole tree: a path covers itself and everything
+# under it, so a vendored dependency the fork carries as ordinary files is one
+# line rather than every file in it.
+$unlisted = @($changed | Where-Object {
+        $file = $_
+        -not ($listed | Where-Object { $file -eq $_ -or $file.StartsWith($_ + '/') })
+    })
+$stale = @($listed | Where-Object {
+        $entry = $_
+        -not ($changed | Where-Object { $_ -eq $entry -or $_.StartsWith($entry + '/') })
+    })
 
 if ($unlisted.Count -gt 0) {
     Write-Host 'Changed since the pinned tag but not in breadstudio/UPSTREAM-EDITS.md:'
