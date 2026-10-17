@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28...3.30)
 
 find_package(Qt6 REQUIRED Widgets)
+find_package(ZLIB REQUIRED)
 
 add_library(bread-desk MODULE)
 add_library(OBS::bread-desk ALIAS bread-desk)
@@ -11,7 +12,7 @@ endif()
 
 target_sources(bread-desk PRIVATE Desk.hpp desk.cpp)
 
-target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets)
+target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets ZLIB::ZLIB)
 
 if(OS_WINDOWS)
   configure_file(cmake/windows/obs-module.rc.in bread-desk.rc)
@@ -71,6 +72,8 @@ target_sources(
     OutputsWindow.hpp
     ProgramSource.cpp
     ProgramSource.hpp
+    ProjectFile.cpp
+    ProjectFile.hpp
     PropertiesPage.cpp
     PropertiesPage.hpp
     SourceList.cpp
@@ -126,5 +129,24 @@ add_executable(bread-multiview-test test/MultiviewLayoutTest.cpp MultiviewLayout
 target_include_directories(bread-multiview-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(
   bread-multiview-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
+
+# The .bstd container: a zip of stored entries the desk writes and reads: no OBS, no Qt.
+add_executable(bread-project-test test/ProjectFileTest.cpp ProjectFile.cpp)
+target_include_directories(bread-project-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+# The test must run from anywhere, so link zlib statically: ZLIB::ZLIB is the import library and
+# would need zlib.dll beside the exe, which nothing puts there. The static library ships next to
+# it in the OBS deps. bread-desk keeps ZLIB::ZLIB, the shared zlib libobs already carries.
+get_filename_component(_bread_zlib_dir "${ZLIB_LIBRARY_RELEASE}" DIRECTORY)
+set(_bread_zlib_static "${_bread_zlib_dir}/zlibstatic.lib")
+if(EXISTS "${_bread_zlib_static}")
+  target_include_directories(bread-project-test PRIVATE "${ZLIB_INCLUDE_DIR}")
+  target_link_libraries(bread-project-test PRIVATE "${_bread_zlib_static}")
+else()
+  target_link_libraries(bread-project-test PRIVATE ZLIB::ZLIB)
+endif()
+set_target_properties(
+  bread-project-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )
