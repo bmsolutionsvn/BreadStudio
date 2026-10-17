@@ -132,17 +132,15 @@ set_target_properties(
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )
 
-# The .bstd container: a zip of stored entries the desk writes and reads: no OBS, no Qt.
+# The Project container: no OBS, no Qt.
 add_executable(bread-project-test test/ProjectFileTest.cpp ProjectFile.cpp)
 target_include_directories(bread-project-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-# The test must run from anywhere, so link zlib statically: ZLIB::ZLIB is the import library and
-# would need zlib.dll beside the exe, which nothing puts there. The static library ships next to
-# it in the OBS deps. bread-desk keeps ZLIB::ZLIB, the shared zlib libobs already carries.
+# libobs's ZLIB::ZLIB is zlib.lib, the import library for a zlib.dll nothing puts on PATH; link the
+# static zlibstatic.lib the OBS deps ship beside it, so the test runs with no DLL on PATH.
 get_filename_component(_bread_zlib_dir "${ZLIB_LIBRARY_RELEASE}" DIRECTORY)
-set(_bread_zlib_static "${_bread_zlib_dir}/zlibstatic.lib")
-if(EXISTS "${_bread_zlib_static}")
+if(EXISTS "${_bread_zlib_dir}/zlibstatic.lib")
   target_include_directories(bread-project-test PRIVATE "${ZLIB_INCLUDE_DIR}")
-  target_link_libraries(bread-project-test PRIVATE "${_bread_zlib_static}")
+  target_link_libraries(bread-project-test PRIVATE "${_bread_zlib_dir}/zlibstatic.lib")
 else()
   target_link_libraries(bread-project-test PRIVATE ZLIB::ZLIB)
 endif()
