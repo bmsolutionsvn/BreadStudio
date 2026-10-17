@@ -67,6 +67,16 @@ static void onSourceRename(void *, calldata_t *)
 static void load()
 {
 	loaded = true;
+	/* The desk takes its microphones and system audio as inputs and does not use OBS's global
+	 * audio devices, so they are cleared at every load - keeping them out of the mixer and out
+	 * of the mix. OBS keeps them on channels 1-6; the desk's bed uses the highest free channel
+	 * from 63 down, so it never lives there. */
+	for (uint32_t channel = 1; channel <= 6; channel++) {
+		OBSSourceAutoRelease source = obs_get_output_source(channel);
+		if (source) {
+			obs_source_remove(source.Get());
+		}
+	}
 	/* the scene events that follow are OBS replaying the collection's scene, not the operator
 	 * changing it, so hold triggers off until the next event-loop turn */
 	suppressTriggers = true;

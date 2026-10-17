@@ -135,20 +135,12 @@ void ensureDeskDocks()
 		return;
 	}
 
-	/* an operator's arrangement - both docks docked and visible - is left alone, so its
-	 * splitting and sizes survive; only a dock that was lost is put back */
-	bool placed = false;
+	/* the desk's arrangement wins over OBS's stored dock state, so both docks are placed at
+	 * every load, not only when one was lost or floating */
 	for (QDockWidget *dock : {inputs, mixer}) {
-		if (dock->isVisible() && !dock->isFloating()) {
-			continue;
-		}
 		dock->setFloating(false);
 		main->addDockWidget(Qt::BottomDockWidgetArea, dock);
 		dock->setVisible(true);
-		placed = true;
-	}
-	if (!placed) {
-		return;
 	}
 
 	main->splitDockWidget(inputs, mixer, Qt::Horizontal);

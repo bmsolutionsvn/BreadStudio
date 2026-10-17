@@ -17,6 +17,8 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 - `frontend/widgets/OBSBasic.cpp` - window title shows BreadStudio and its version
 - `frontend/widgets/OBSBasic_SysTray.cpp` - tray tooltip and notification title
 - `frontend/dialogs/OBSAbout.cpp` - name, "based on OBS Studio" version line, About text; no request to obsproject.com
+- `frontend/widgets/OBSBasic_SceneItems.cpp` - CreateFirstRunSources makes no global audio devices, because the desk takes its microphones and system audio as inputs
+- `frontend/forms/OBSBasicSettings.ui` - Settings → Audio's Global Audio Devices group is hidden, because the desk has no global audio devices; its control objects stay for OBSBasicSettings.cpp
 
 ## Replaced
 

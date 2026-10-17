@@ -6049,9 +6049,14 @@
                  </widget>
                 </item>
                 <item>
+                 <!-- The desk has no global audio devices, so the group is hidden. The widget
+                      stays because OBSBasicSettings.cpp uses its device controls. -->
                  <widget class="QGroupBox" name="audioDevicesGroupBox">
                   <property name="title">
                    <string>Basic.Settings.Audio.Devices</string>
+                  </property>
+                  <property name="visible">
+                   <bool>false</bool>
                   </property>
                   <layout class="QFormLayout" name="formLayout_53">
                    <property name="fieldGrowthPolicy">

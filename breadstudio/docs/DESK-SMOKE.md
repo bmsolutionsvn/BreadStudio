@@ -223,6 +223,9 @@ shown — OBS has no such source property.
    Down puts it back exactly as it was — the same place in the list, the same on/off tick and
    the same picture geometry — and then greys out again. Up, Down or another remove clears it,
    so Undo never puts a layer into a slot that has since changed.
+10. A fresh profile has no Desktop Audio or Mic in the mixer, Settings → Audio
+    shows no Global Audio Devices group, and an existing profile's global
+    devices are gone after a restart.
 
 ## J. OBS's surface is hidden
 
@@ -253,6 +256,8 @@ and an upstream rename breaks them silently.
 11. The footer's **Transitions** button is unchecked and OBS's Scene Transitions
     dock is not shown; pressing it pins the dock beside the mixer, and either
     choice survives a restart.
+12. The input bar and Mixer are at the bottom on every launch, whatever the saved
+    dock state.
 
 ## Before a run
 
