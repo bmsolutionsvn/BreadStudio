@@ -84,6 +84,18 @@ jobs:
           $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'OMT-HX'
           & (Join-Path $sibling 'scripts/build-libomt.ps1')
 
+      # The windows-x64 preset names a generator, and the runner's Visual Studio
+      # is whatever the image carries. Print it, so a failure to find one says
+      # which instance was there instead of only that none matched.
+      - name: Show the toolchain
+        shell: pwsh
+        run: |
+          Get-ChildItem 'C:\Program Files\Microsoft Visual Studio' -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "instance: $($_.Name)" }
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -property displayName
+          Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "windows sdk: $($_.Name)" }
+
       # Configures the windows-x64 preset with the pinned OBS version and
       # ENABLE_WHATSNEW=OFF, then builds it.
       - name: Configure and build
