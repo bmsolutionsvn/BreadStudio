@@ -17,6 +17,7 @@
 #include "MultiviewSource.hpp"
 #include "OutputEngine.hpp"
 #include "ProgramSource.hpp"
+#include "Project.hpp"
 
 #include <vector>
 
@@ -40,6 +41,12 @@ static bool suppressTriggers = false;
 static InputBar *bar = nullptr; /* owned by its dock */
 
 static Mixer *mixer = nullptr; /* owned by its dock */
+
+/* the one Project the desk has open (P2) */
+static Project *project = nullptr;
+
+/* declared here, defined with the other save callbacks: the EXIT case takes it off */
+static void onProjectSaved(obs_data_t *save_data, bool saving, void *private_data);
 
 /* a scene collection's outputs, read while it loads and started once its scenes exist */
 static OutputsConfig pendingOutputs;
@@ -148,6 +155,11 @@ static void onEvent(enum obs_frontend_event event, void *)
 		unload();
 		busMeters().stop();
 		signal_handler_disconnect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
+		/* the save callback is taken off before the Project it writes back to is
+		 * released, so a save during teardown cannot call a freed object */
+		obs_frontend_remove_save_callback(onProjectSaved, nullptr);
+		delete project;
+		project = nullptr;
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
 		inputsChanged();
@@ -223,6 +235,16 @@ static void saveOutputs(obs_data_t *data, bool saving, void *)
 	}
 }
 
+/* OBS writes the scene collection: the show has moved on since the .bstd was last
+ * written, so the open Project has unsaved changes (P9). A save the desk asked for
+ * itself is absorbed by the Project, so its own write does not bring the dot back. */
+static void onProjectSaved(obs_data_t *, bool saving, void *)
+{
+	if (project) {
+		project->noteObSave(saving);
+	}
+}
+
 bool obs_module_load(void)
 {
 	registerProgramSource();
@@ -236,6 +258,8 @@ bool obs_module_load(void)
 	obs_frontend_add_dock_by_id(MixerDockId, obs_module_text("Mixer"), mixer);
 	signal_handler_connect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
 
+	project = new Project();
+
 	obs_frontend_add_event_callback(onEvent, nullptr);
 
 	for (size_t i = 0; i < NumberHotkeys; i++) {
@@ -246,6 +270,7 @@ bool obs_module_load(void)
 	}
 	obs_frontend_add_save_callback(saveNumberHotkeys, nullptr);
 	obs_frontend_add_save_callback(saveOutputs, nullptr);
+	obs_frontend_add_save_callback(onProjectSaved, nullptr);
 
 	obs_frontend_add_tools_menu_item(obs_module_text("DeskLayout"), [](void *) { applyLayout(); }, nullptr);
 

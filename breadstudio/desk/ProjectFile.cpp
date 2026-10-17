@@ -1,4 +1,5 @@
 #include "ProjectFile.hpp"
+#include "Project.hpp"
 
 #include <cctype>
 #include <cstddef>
@@ -7,6 +8,15 @@
 #include <utility>
 
 #include <zlib.h>
+
+/* The versions a Project's manifest carries. The desk's CMake gives both; the
+ * fallbacks keep the pure half compilable on its own (the test defines them too). */
+#ifndef BREADSTUDIO_VERSION
+#define BREADSTUDIO_VERSION "0.0.0"
+#endif
+#ifndef OBS_VERSION
+#define OBS_VERSION "0.0.0"
+#endif
 
 namespace desk {
 
@@ -121,6 +131,31 @@ void appendEscaped(std::string &out, const std::string &value)
 
 } // namespace
 
+bool validEntryPath(const std::string &path)
+{
+	if (path.empty() || path.front() == '/' || path.find('\\') != std::string::npos ||
+	    path.find(':') != std::string::npos || path.find('\0') != std::string::npos) {
+		return false;
+	}
+	size_t at = 0;
+	while (at <= path.size()) {
+		const size_t slash = path.find('/', at);
+		const size_t end = slash == std::string::npos ? path.size() : slash;
+		const std::string segment = path.substr(at, end - at);
+		/* Windows drops a trailing dot or space from a path component, so ".. " and
+		 * "..." would open as ".."; refuse them outright alongside "." and ".." */
+		if (segment.empty() || segment == "." || segment == ".." || segment.back() == '.' ||
+		    segment.back() == ' ') {
+			return false;
+		}
+		if (slash == std::string::npos) {
+			break;
+		}
+		at = slash + 1;
+	}
+	return true;
+}
+
 std::string writeProjectFile(const std::string &path, const std::vector<ProjectEntry> &entries)
 {
 	bool hasManifest = false;
@@ -131,6 +166,13 @@ std::string writeProjectFile(const std::string &path, const std::vector<ProjectE
 	}
 	if (!hasManifest) {
 		return std::string("the project has no ") + ManifestPath;
+	}
+
+	/* a .bstd the desk wrote can only hold names it could unpack again */
+	for (const ProjectEntry &entry : entries) {
+		if (!validEntryPath(entry.path)) {
+			return "the entry name '" + entry.path + "' is not safe for a .bstd";
+		}
 	}
 
 	struct Central {
@@ -289,6 +331,12 @@ bool readProjectFile(const std::string &path, std::vector<ProjectEntry> &entries
 
 	bool hasManifest = false;
 	for (const ProjectEntry &entry : found) {
+		/* a container sent to this machine might hold names that escape the folder
+		 * they are joined to; refuse the whole file rather than unpack one */
+		if (!validEntryPath(entry.path)) {
+			error = path + ": '" + entry.path + "' is not a safe entry name";
+			return false;
+		}
 		if (entry.path == ManifestPath) {
 			hasManifest = true;
 		}
@@ -331,6 +379,67 @@ bool manifestFromJson(const std::string &json, ProjectManifest &manifest, std::s
 	manifest = parsed;
 	error.clear();
 	return true;
+}
+
+ProjectManifest manifestFor(const std::string &name)
+{
+	return ProjectManifest{name, BREADSTUDIO_VERSION, OBS_VERSION};
+}
+
+namespace {
+
+/* One path segment for `name`, so nothing it holds can walk out of the folder the
+ * segment is joined to: OBS's own file-name characters are replaced, and leading and
+ * trailing spaces and dots are dropped, so a name of only dots cannot become "." or
+ * "..". The name the operator sees is kept whole; this is only the folder's leaf. */
+std::string projectFolderName(const std::string &name)
+{
+	std::string leaf;
+	for (char c : name) {
+		const unsigned char byte = (unsigned char)c;
+		if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' ||
+		    c == '|' || byte < 0x20) {
+			leaf.push_back('_');
+		} else {
+			leaf.push_back(c);
+		}
+	}
+	size_t first = 0;
+	size_t last = leaf.size();
+	while (first < last && (leaf[first] == ' ' || leaf[first] == '.')) {
+		first++;
+	}
+	while (last > first && (leaf[last - 1] == ' ' || leaf[last - 1] == '.')) {
+		last--;
+	}
+	leaf = leaf.substr(first, last - first);
+	if (leaf.empty()) {
+		leaf = "Project";
+	}
+	return leaf;
+}
+
+std::string joined(const std::string &root, const std::string &rest)
+{
+	if (root.empty()) {
+		return rest;
+	}
+	if (root.back() == '/' || root.back() == '\\') {
+		return root + rest;
+	}
+	return root + "/" + rest;
+}
+
+} // namespace
+
+std::string profileDirFor(const std::string &appData, const std::string &name)
+{
+	return joined(appData, "obs-studio/basic/profiles") + "/" + projectFolderName(name);
+}
+
+std::string sceneFileFor(const std::string &appData, const std::string &name)
+{
+	return joined(appData, "obs-studio/basic/scenes") + "/" + projectFolderName(name) + ".json";
 }
 
 } // namespace desk

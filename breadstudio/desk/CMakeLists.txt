@@ -14,6 +14,12 @@ target_sources(bread-desk PRIVATE Desk.hpp desk.cpp)
 
 target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets ZLIB::ZLIB)
 
+# The versions a Project's manifest carries: the fork's own, and the OBS it is built on.
+file(STRINGS "${CMAKE_SOURCE_DIR}/breadstudio/VERSION" BREADSTUDIO_VERSION LIMIT_COUNT 1)
+target_compile_definitions(
+  bread-desk PRIVATE BREADSTUDIO_VERSION="${BREADSTUDIO_VERSION}" OBS_VERSION="${OBS_VERSION_CANONICAL}"
+)
+
 if(OS_WINDOWS)
   configure_file(cmake/windows/obs-module.rc.in bread-desk.rc)
   target_sources(bread-desk PRIVATE bread-desk.rc)
@@ -72,6 +78,8 @@ target_sources(
     OutputsWindow.hpp
     ProgramSource.cpp
     ProgramSource.hpp
+    Project.cpp
+    Project.hpp
     ProjectFile.cpp
     ProjectFile.hpp
     PropertiesPage.cpp
@@ -135,6 +143,10 @@ set_target_properties(
 # The Project container: no OBS, no Qt.
 add_executable(bread-project-test test/ProjectFileTest.cpp ProjectFile.cpp)
 target_include_directories(bread-project-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+# The same versions the desk is built with, so the manifest case is proven against them.
+target_compile_definitions(
+  bread-project-test PRIVATE BREADSTUDIO_VERSION="${BREADSTUDIO_VERSION}" OBS_VERSION="${OBS_VERSION_CANONICAL}"
+)
 # libobs's ZLIB::ZLIB is zlib.lib, the import library for a zlib.dll nothing puts on PATH; link the
 # static zlibstatic.lib the OBS deps ship beside it, so the test runs with no DLL on PATH.
 get_filename_component(_bread_zlib_dir "${ZLIB_LIBRARY_RELEASE}" DIRECTORY)

@@ -1,4 +1,5 @@
 #include "ProjectFile.hpp"
+#include "Project.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -173,6 +174,76 @@ static std::string writeOtherZip(const std::string &path, const std::string &nam
 	return "";
 }
 
+/* A zip with stored entries made by hand, so the reader can be shown a hostile container that the
+ * writer itself would now refuse. */
+static void writeRawZip(const std::string &path, const std::vector<std::pair<std::string, std::string>> &entries)
+{
+	struct Central {
+		uint32_t crc;
+		uint32_t size;
+		uint32_t offset;
+		std::string name;
+	};
+
+	std::vector<uint8_t> out;
+	std::vector<Central> directory;
+	for (const std::pair<std::string, std::string> &entry : entries) {
+		const std::string &name = entry.first;
+		const std::string &body = entry.second;
+		const uint32_t crc = (uint32_t)crc32(0, (const Bytef *)body.data(), (uInt)body.size());
+		const uint32_t offset = (uint32_t)out.size();
+
+		put32(out, 0x04034b50);
+		put16(out, 20);
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put32(out, crc);
+		put32(out, (uint32_t)body.size());
+		put32(out, (uint32_t)body.size());
+		put16(out, (uint16_t)name.size());
+		put16(out, 0);
+		putBytes(out, name);
+		putBytes(out, body);
+
+		directory.push_back(Central{crc, (uint32_t)body.size(), offset, name});
+	}
+
+	const uint32_t directoryStart = (uint32_t)out.size();
+	for (const Central &c : directory) {
+		put32(out, 0x02014b50);
+		put16(out, 20);
+		put16(out, 20);
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put32(out, c.crc);
+		put32(out, c.size);
+		put32(out, c.size);
+		put16(out, (uint16_t)c.name.size());
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put16(out, 0);
+		put32(out, 0);
+		put32(out, c.offset);
+		putBytes(out, c.name);
+	}
+	const uint32_t directorySize = (uint32_t)out.size() - directoryStart;
+
+	put32(out, 0x06054b50);
+	put16(out, 0);
+	put16(out, 0);
+	put16(out, (uint16_t)directory.size());
+	put16(out, (uint16_t)directory.size());
+	put32(out, directorySize);
+	put32(out, directoryStart);
+	put16(out, 0);
+	writeAll(path, out);
+}
+
 /* a zip with stored entries, and the manifest, round-trip exactly */
 static void testRoundTrip()
 {
@@ -183,7 +254,6 @@ static void testRoundTrip()
 		{"profile/basic.ini", bytes("a=1")},
 		{"scenes/Untitled.json", bytes("{}")},
 		{"media/empty.bin", {}}, /* a zero-length body */
-		{"", bytes("no name")},  /* an empty name */
 	};
 
 	CHECK(writeProjectFile(path, entries).empty());
@@ -290,11 +360,109 @@ static void testRefused()
 	std::filesystem::remove(good);
 }
 
+/* A .bstd sent from elsewhere is refused whole when any entry name would walk out of the folder it
+ * is joined to. The reader is the one place that cannot be forgotten, so the hostile file is built
+ * by hand and handed straight to it. */
+static void testRejectsUnsafeNames()
+{
+	const std::vector<std::string> unsafe = {
+		"profile/../../evil",    /* walks up out of the profile folder */
+		"../evil",               /* walks up out of the container root */
+		"/etc/passwd",           /* absolute */
+		"C:/evil",               /* a drive */
+		"profile\\..\\..\\evil", /* a backslash separator */
+		"profile//empty",        /* an empty path element */
+		"",                      /* an empty name */
+		".. ",                   /* ".." once Windows drops the trailing space */
+		"...",                   /* an all-dot component */
+		"a./b",                  /* a component ending in a dot */
+		"a /b",                  /* a component ending in a space */
+	};
+	for (const std::string &name : unsafe) {
+		const std::string path = tempFile("bread-project-unsafe.bstd");
+		writeRawZip(path, {{"project.json", "{}"}, {name, "{}"}});
+		std::vector<ProjectEntry> entries;
+		std::string error;
+		CHECK(!readProjectFile(path, entries, error));
+		CHECK(!error.empty());
+		std::filesystem::remove(path);
+	}
+
+	/* the writer refuses the same names, so the desk cannot make one either */
+	const std::string out = tempFile("bread-project-unsafe-out.bstd");
+	const std::vector<ProjectEntry> entries = {{ManifestPath, bytes("{}")}, {"profile/../../evil", bytes("x")}};
+	CHECK(!writeProjectFile(out, entries).empty());
+	std::filesystem::remove(out);
+
+	/* the predicate itself, so a reader that stopped calling it is still caught */
+	CHECK(validEntryPath("profile/basic.ini"));
+	CHECK(validEntryPath("media/clip final.mp4"));
+	CHECK(!validEntryPath(""));
+	CHECK(!validEntryPath(".."));
+	CHECK(!validEntryPath("a/../b"));
+	CHECK(!validEntryPath("/a"));
+	CHECK(!validEntryPath("C:/a"));
+	CHECK(!validEntryPath("a\\b"));
+	CHECK(!validEntryPath("a//b"));
+	CHECK(!validEntryPath(".. "));
+	CHECK(!validEntryPath("..."));
+	CHECK(!validEntryPath("a./b"));
+	CHECK(!validEntryPath("a /b"));
+	CHECK(!validEntryPath(std::string("a\0b", 3)));
+}
+
+/* The Project's pure helpers: a name never walks out of the config root, and the
+ * manifest carries the versions the build gave it. */
+static void testProjectHelpers()
+{
+	const std::string root = "/config root";
+	const std::string profilePrefix = root + "/obs-studio/basic/profiles/";
+	const std::string scenesPrefix = root + "/obs-studio/basic/scenes/";
+
+	/* a name with a path separator, spaces and dots stays one folder under the root */
+	const std::string dir = profileDirFor(root, "..\\..\\My Show.v1");
+	CHECK(dir.compare(0, profilePrefix.size(), profilePrefix) == 0);
+	const std::string dirLeaf = dir.substr(profilePrefix.size());
+	CHECK(dirLeaf.find('/') == std::string::npos);
+	CHECK(dirLeaf.find('\\') == std::string::npos);
+	CHECK(dirLeaf != "." && dirLeaf != "..");
+
+	/* the same for the collection file, which also ends in .json */
+	const std::string file = sceneFileFor(root, "../../Sunday Service..");
+	CHECK(file.compare(0, scenesPrefix.size(), scenesPrefix) == 0);
+	const std::string fileLeaf = file.substr(scenesPrefix.size());
+	CHECK(fileLeaf.find('/') == std::string::npos);
+	CHECK(fileLeaf.find('\\') == std::string::npos);
+	CHECK(fileLeaf.size() > 5 && fileLeaf.compare(fileLeaf.size() - 5, 5, ".json") == 0);
+
+	/* a name of only dots cannot become a parent folder */
+	const std::string dots = profileDirFor(root, "..");
+	CHECK(dots.compare(0, profilePrefix.size(), profilePrefix) == 0);
+	CHECK(dots.size() > profilePrefix.size());
+	CHECK(dots.substr(profilePrefix.size()) != "." && dots.substr(profilePrefix.size()) != "..");
+
+	/* a name with a separator is folded into the leaf, not honoured */
+	CHECK(profileDirFor(root, "a/b").find("a_b") != std::string::npos);
+
+	const ProjectManifest manifest = manifestFor("My Show");
+	CHECK(manifest.project == "My Show");
+	CHECK(!manifest.breadstudio.empty());
+	CHECK(!manifest.obs.empty());
+#ifdef BREADSTUDIO_VERSION
+	CHECK(manifest.breadstudio == BREADSTUDIO_VERSION);
+#endif
+#ifdef OBS_VERSION
+	CHECK(manifest.obs == OBS_VERSION);
+#endif
+}
+
 int main()
 {
 	testRoundTrip();
 	testManifest();
 	testRefused();
+	testRejectsUnsafeNames();
+	testProjectHelpers();
 
 	if (failures != 0) {
 		std::printf("ProjectFile: %d checks failed\n", failures);

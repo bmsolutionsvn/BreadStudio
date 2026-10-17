@@ -35,4 +35,11 @@ bool manifestFromJson(const std::string &json, ProjectManifest &manifest, std::s
 /* the name project.json is stored under */
 inline constexpr const char *ManifestPath = "project.json";
 
+/* True when `path` is safe as a container entry: a relative path of non-empty
+ * segments, none of them "." or "..", with '/' as the only separator and no drive.
+ * The writer refuses an entry that is not, and the reader refuses a container that
+ * holds one, so unpacking a received .bstd (P6 is "send the file") can never be
+ * handed a name that walks out of the folder it is joined to. */
+bool validEntryPath(const std::string &path);
+
 } // namespace desk
