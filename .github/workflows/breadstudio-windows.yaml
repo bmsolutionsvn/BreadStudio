@@ -25,11 +25,17 @@ jobs:
           # history and every tag must be here
           fetch-depth: 0
 
-      - name: The pinned OBS tag is present
+      # check-edits.ps1 diffs the tree against the pinned OBS tag. The fork's own
+      # remote has no OBS tags, so the tag is fetched from OBS itself; a shallow
+      # fetch is enough, because the diff needs the tag's tree, not its history.
+      - name: Fetch the pinned OBS tag
         shell: pwsh
         run: |
           $tag = (Get-Content breadstudio/UPSTREAM-TAG -TotalCount 1).Trim()
           if (-not $tag) { throw 'breadstudio/UPSTREAM-TAG is empty' }
+          if (-not (git rev-parse --verify "refs/tags/$tag" 2>$null)) {
+            git fetch --depth=1 https://github.com/obsproject/obs-studio.git "refs/tags/$tag`:refs/tags/$tag"
+          }
           git rev-parse --verify "refs/tags/$tag" | Out-Null
           Write-Host "pinned OBS tag $tag is present"
 
