@@ -33,7 +33,10 @@ struct OmtOutput {
 	uint32_t height = 0;
 	int fpsNum = 0;
 	int fpsDen = 1;
+	bool wantAlpha = false; /* the output sends alpha, from the engine's "alpha" setting */
 	bool alpha = false;
+	bool nv12 = false;      /* OMT-HX without alpha: the canvas's NV12 goes to the encoder as it is */
+	bool fullRange = false; /* the NV12 canvas's range */
 	int sampleRate = 0;
 	size_t channels = 0;
 	std::atomic<bool> started = false;
@@ -65,6 +68,7 @@ void omtOutputUpdate(void *data, obs_data_t *settings)
 	/* the engine passes "vmx", "hevc" or "h264"; OMT (VMX) is the default */
 	o->mode = mode == "hevc" || mode == "h264" ? omthx::Mode::Hx : omthx::Mode::Full;
 	o->codec = mode == "h264" ? omthx::Codec::H264 : omthx::Codec::Hevc;
+	o->wantAlpha = obs_data_get_bool(settings, "alpha");
 }
 
 void *omtOutputCreate(obs_data_t *settings, obs_output_t *output)
@@ -100,9 +104,16 @@ bool omtOutputStart(void *data)
 		o->height = info->height;
 		o->fpsNum = (int)info->fps_num;
 		o->fpsDen = (int)info->fps_den;
-		o->alpha = true; /* the BGRA frame handed on is premultiplied, which is what sendVideo is told */
-		/* Output 1 has no canvas and is NV12 by default, so convert whatever the engine gives us */
-		if (info->format != VIDEO_FORMAT_BGRA) {
+		/* a BGRA canvas is premultiplied, which is what sendVideo is told; alpha costs a picture of
+		 * double height, so it is coded only when the output sends it */
+		o->alpha = o->wantAlpha && info->format == VIDEO_FORMAT_BGRA;
+		/* BT.709 NV12 (OBS's default, and what OMT-HX codes) needs no conversion for OMT-HX */
+		const bool bt709 = info->colorspace == VIDEO_CS_DEFAULT || info->colorspace == VIDEO_CS_709 ||
+				   info->colorspace == VIDEO_CS_SRGB;
+		o->nv12 = o->mode == omthx::Mode::Hx && info->format == VIDEO_FORMAT_NV12 && bt709;
+		o->fullRange = info->range == VIDEO_RANGE_FULL;
+		/* anything else (Output 1 sending VMX, another colour space) is converted to BGRA on the CPU */
+		if (info->format != VIDEO_FORMAT_BGRA && !o->nv12) {
 			video_scale_info src = {};
 			src.format = info->format;
 			src.width = info->width;
@@ -200,6 +211,14 @@ void omtOutputRawVideo(void *data, video_data *frame)
 	format.fpsD = o->fpsDen;
 	format.alpha = o->alpha;
 
+	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
+	const int64_t timestamp = (int64_t)frame->timestamp / 100;
+	if (o->nv12) {
+		sender->sendVideoNv12(format, frame->data[0], (int)frame->linesize[0], frame->data[1],
+				      (int)frame->linesize[1], o->fullRange, timestamp);
+		return;
+	}
+
 	const size_t size = (size_t)o->width * o->height * 4;
 	const uint8_t *pixels = frame->data[0];
 	if (o->scaler) {
@@ -211,8 +230,6 @@ void omtOutputRawVideo(void *data, video_data *frame)
 		pixels = o->bgraBuffer.data();
 	}
 	const std::span<const uint8_t> bgra(pixels, size);
-	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
-	const int64_t timestamp = (int64_t)frame->timestamp / 100;
 	sender->sendVideo(format, bgra, o->alpha, timestamp);
 }
 

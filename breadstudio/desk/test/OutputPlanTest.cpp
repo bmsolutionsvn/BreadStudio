@@ -218,6 +218,9 @@ int main()
 		next = now;
 		next.outputs[1].omt = OmtMode::H264;
 		CHECK(steps(1, now, false, next, false).omt);
+		CHECK(!steps(1, now, false, next, false).canvas); /* both HX: the canvas stays NV12 */
+		next.outputs[1].omt = OmtMode::Vmx;
+		CHECK(steps(1, now, false, next, false).canvas); /* VMX takes BGRA */
 	}
 
 	/* a codec change restarts what uses the encoders */

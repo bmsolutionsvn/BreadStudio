@@ -191,6 +191,8 @@ void *omt_create(obs_data_t *settings, obs_source_t *source)
 {
 	auto *s = new omt_source();
 	s->source = source;
+	/* show each picture as it arrives: buffered, OBS holds frames by timestamp, up to 30 of them */
+	obs_source_set_async_unbuffered(source, true);
 	omt_update(s, settings);
 	return s;
 }

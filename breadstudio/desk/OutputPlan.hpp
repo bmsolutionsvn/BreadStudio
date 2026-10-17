@@ -60,6 +60,9 @@ struct OutputRun {
 
 OutputRun outputRun(int index, const OutputsConfig &config, bool streaming, int programWidth, int programHeight);
 
+/* A BGRA canvas for alpha or plain OMT (VMX); NV12 otherwise, which the GPU makes and OMT-HX encodes as it is */
+bool bgraCanvas(const OutputRun &run);
+
 /* What a change does to one output. A true piece is stopped and, if it is still wanted, started
  * again; a false piece keeps running untouched (outputs spec §3.3, §4.2). `source` alone means only
  * what the output shows changes, and nothing restarts. */

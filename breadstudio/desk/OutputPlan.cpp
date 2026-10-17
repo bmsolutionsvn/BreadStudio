@@ -44,6 +44,11 @@ OutputRun outputRun(int index, const OutputsConfig &config, bool streaming, int 
 	return run;
 }
 
+bool bgraCanvas(const OutputRun &run)
+{
+	return run.alpha || run.omt == OmtMode::Vmx;
+}
+
 OutputSteps outputSteps(int index, const OutputsConfig &now, bool nowStreaming, const OutputsConfig &next,
 			bool nextStreaming, int programWidth, int programHeight)
 {
@@ -54,7 +59,7 @@ OutputSteps outputSteps(int index, const OutputsConfig &now, bool nowStreaming, 
 
 	OutputSteps steps;
 	steps.canvas = a.canvas != b.canvas ||
-		       (b.canvas && (a.width != b.width || a.height != b.height || a.alpha != b.alpha));
+		       (b.canvas && (a.width != b.width || a.height != b.height || bgraCanvas(a) != bgraCanvas(b)));
 	steps.encoders = steps.canvas || a.encoders != b.encoders ||
 			 (b.encoders && (x.codec != y.codec || x.bitrateKbps != y.bitrateKbps || x.bus != y.bus));
 	steps.ndi = steps.canvas || a.ndi != b.ndi || (b.ndi && x.bus != y.bus);

@@ -221,6 +221,7 @@ void OutputEngine::startSenders(int output)
 	auto startRaw = [&](OBSOutputAutoRelease &slot, const char *type, const char *mode) {
 		OBSDataAutoRelease settings = obs_data_create();
 		obs_data_set_string(settings, "name", name.c_str());
+		obs_data_set_bool(settings, "alpha", run.alpha);
 		if (mode) {
 			obs_data_set_string(settings, "mode", mode);
 		}
@@ -355,11 +356,9 @@ void OutputEngine::reconcile(const OutputsConfig &next, bool nextLive)
 			/* inputs are laid out for the main mix's base size; the output size scales it */
 			canvasInfo.output_width = (uint32_t)run.width;
 			canvasInfo.output_height = (uint32_t)run.height;
-			/* omthx's Sender takes BGRA, so an output that sends OMT needs a BGRA canvas too
-			 * (outputs spec §4.3); the OMT output refuses any other format */
-			const OmtMode omt = wanted.outputs[(size_t)i].omt;
-			canvasInfo.output_format = (run.alpha || omt != OmtMode::Off) ? VIDEO_FORMAT_BGRA
-										      : VIDEO_FORMAT_NV12;
+			/* Plain OMT (VMX) takes BGRA. OMT-HX without alpha takes the NV12 the GPU already
+			 * makes, so the picture reaches the encoder with no CPU colour conversion. */
+			canvasInfo.output_format = bgraCanvas(run) ? VIDEO_FORMAT_BGRA : VIDEO_FORMAT_NV12;
 			const std::string name = senderName(i);
 			r.canvas = obs_canvas_create_private(name.c_str(), &canvasInfo, ACTIVATE | EPHEMERAL);
 			if (!r.canvas) {
