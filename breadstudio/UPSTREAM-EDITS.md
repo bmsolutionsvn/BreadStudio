@@ -28,3 +28,5 @@ One file per line, in this exact form: a dash, the path in backticks, the reason
 - `README.rst` - rewritten to describe BreadStudio instead of OBS Studio
 
 ## Added outside breadstudio/
+
+- `.github/workflows/breadstudio-windows.yaml` - the fork's own CI: the repository's checks on every push and pull request

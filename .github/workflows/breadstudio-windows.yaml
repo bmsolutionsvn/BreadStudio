@@ -1,0 +1,62 @@
+# This workflow is BreadStudio's own. OBS's inherited workflows are disabled in
+# the repository's Actions settings (Actions → Workflows → Disable), never edited,
+# so an upstream merge never conflicts with them; see the S0 design section 5.
+
+name: BreadStudio
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    name: The fork's own checks
+
+    # windows-2025 carries the Visual Studio 2022 the windows-x64 preset names.
+    # The build job below wants the same image, once the tree can build alone.
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out the repository and its history
+        uses: actions/checkout@v4
+        with:
+          # check-edits.ps1 diffs against the pinned OBS tag, so the whole
+          # history and every tag must be here
+          fetch-depth: 0
+
+      - name: The pinned OBS tag is present
+        shell: pwsh
+        run: |
+          $tag = (Get-Content breadstudio/UPSTREAM-TAG -TotalCount 1).Trim()
+          if (-not $tag) { throw 'breadstudio/UPSTREAM-TAG is empty' }
+          git rev-parse --verify "refs/tags/$tag" | Out-Null
+          Write-Host "pinned OBS tag $tag is present"
+
+      # Every OBS file the fork changes outside breadstudio/ must be listed in
+      # UPSTREAM-EDITS.md, and every listed file must be changed. A conflict
+      # during an upstream merge should only ever be in a file on that list.
+      - name: check-edits
+        shell: pwsh
+        run: ./breadstudio/check-edits.ps1
+
+      - name: check-edits' own tests
+        shell: pwsh
+        run: ./breadstudio/check-edits.test.ps1
+
+      - name: The packaging step's tests
+        shell: pwsh
+        run: ./breadstudio/packaging/Rename-Product.test.ps1
+
+  # The build is not here yet, and deliberately: the tree cannot build alone.
+  #
+  #   * breadstudio/omt-hx/CMakeLists.txt FATAL_ERRORs without a built OMT-HX
+  #     checkout at ../OMT-HX, and OMT-HX is a sibling repository, not a
+  #     submodule of this one;
+  #   * OBS's three submodules (plugins/obs-browser, plugins/obs-websocket and
+  #     deps/libdshowcapture) would each have to be checked out and, for the
+  #     ones the desk does not use, dropped.
+  #
+  # Both are being done so the repository builds from a clean clone. When they
+  # land, this job builds windows-x64 with breadstudio/build.ps1 and uploads the
+  # built program and its plugins as an artifact.
