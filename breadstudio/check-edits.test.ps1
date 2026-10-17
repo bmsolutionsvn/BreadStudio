@@ -65,6 +65,17 @@ try {
     Expect 1 'staged, uncommitted file is not listed'
     G reset -q --hard
 
+    # An entry may name a whole tree, so a vendored dependency is one line.
+    New-Item -ItemType Directory -Force (Join-Path $repo 'e/f') | Out-Null
+    Set-Content (Join-Path $repo 'e/f/g.c') 'g'
+    G add -A
+    G commit -qm tree
+    Expect 1 'a file under an unlisted tree is not listed'
+
+    Add-Content $list '- `e/f` - a vendored tree'
+    G commit -qam list-tree
+    Expect 0 'a file under a listed tree is listed'
+
     Set-Content (Join-Path $repo 'breadstudio/UPSTREAM-TAG') '9.9.9'
     G commit -qam badtag
     Expect 1 'pinned tag does not exist'
