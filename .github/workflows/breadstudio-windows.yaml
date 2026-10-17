@@ -96,6 +96,20 @@ jobs:
           Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -ErrorAction SilentlyContinue |
             ForEach-Object { Write-Host "windows sdk: $($_.Name)" }
 
+      # OBS takes its version from `git describe` when OBS_VERSION_OVERRIDE is not
+      # set, and the fork's remote carries no OBS tags, so the pinned one is
+      # fetched here too - the same step the gates job runs.
+      - name: Fetch the pinned OBS tag
+        shell: pwsh
+        run: |
+          $tag = (Get-Content breadstudio/UPSTREAM-TAG -TotalCount 1).Trim()
+          if (-not $tag) { throw 'breadstudio/UPSTREAM-TAG is empty' }
+          if (-not (git rev-parse --verify "refs/tags/$tag" 2>$null)) {
+            git fetch --depth=1 https://github.com/obsproject/obs-studio.git "refs/tags/$tag`:refs/tags/$tag"
+          }
+          git rev-parse --verify "refs/tags/$tag" | Out-Null
+          Write-Host "pinned OBS tag $tag is present"
+
       # Configures the windows-x64 preset with the pinned OBS version and
       # ENABLE_WHATSNEW=OFF, then builds it.
       - name: Configure and build
