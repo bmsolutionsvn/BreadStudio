@@ -161,6 +161,9 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	slider->setValue((int)(obs_fader_get_deflection(strip->fader) * 1000.0f));
 	connect(slider, &QSlider::valueChanged, this,
 		[strip](int value) { obs_fader_set_deflection(strip->fader, (float)value / 1000.0f); });
+	/* the level is applied as the fader moves; the Project is marked changed only when the drag
+	 * is released, so the title does not flicker on every pixel (P9) */
+	connect(slider, &QSlider::sliderReleased, this, [] { markProjectChanged(); });
 	levels->addWidget(slider);
 
 	strip->volmeter = obs_volmeter_create(OBS_FADER_LOG);
@@ -184,6 +187,7 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 		} else {
 			obs_source_set_muted(strip->source, !on);
 		}
+		markProjectChanged();
 	});
 	switches->addWidget(strip->audio);
 	strip->muteSignal.Connect(obs_source_get_signal_handler(source), "mute", onMute, this);
@@ -208,6 +212,7 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 	connect(phones, &QToolButton::clicked, this, [strip](bool on) {
 		obs_source_set_monitoring_type(strip->source,
 					       on ? OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT : OBS_MONITORING_TYPE_NONE);
+		markProjectChanged();
 	});
 	switches->addWidget(phones);
 	switches->addStretch(1);
@@ -229,6 +234,7 @@ void Mixer::addStrip(const QString &title, obs_source_t *input, obs_source_t *so
 			uint32_t mask = obs_source_get_audio_mixers(strip->source);
 			mask = on ? (mask | (1u << bus)) : (mask & ~(1u << bus));
 			obs_source_set_audio_mixers(strip->source, mask);
+			markProjectChanged();
 		});
 		sends->addWidget(send);
 	}

@@ -262,7 +262,14 @@ OutputsConfig OutputsWindow::read() const
 
 void OutputsWindow::accept()
 {
-	OutputEngine::instance().apply(read());
+	const OutputsConfig before = OutputEngine::instance().config();
+	const OutputsConfig next = read();
+	OutputEngine::instance().apply(next);
+	/* only a real change marks the Project; opening the window and pressing OK unchanged does
+	 * not (P9) */
+	if (!(next.outputs == before.outputs && next.destinations == before.destinations)) {
+		markProjectChanged();
+	}
 	QDialog::accept();
 }
 

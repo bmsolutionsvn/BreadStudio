@@ -266,6 +266,7 @@ void InputSelect::accept()
 
 	if (existing) {
 		current->apply();
+		markProjectChanged();
 		QDialog::accept();
 		return;
 	}

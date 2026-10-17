@@ -1,6 +1,7 @@
 #pragma once
 
 class QMenu;
+class QWidget;
 
 namespace desk {
 
@@ -43,5 +44,23 @@ void hideObsStreamButton();
  * handed to a popup, so the desk can offer them from its footer now the menu bar is hidden.
  * Built once and cached. */
 QMenu *obsMainMenu();
+
+/* The window title, from OBS's own: its base text with a dot appended while the open Project has
+ * changes that are not written (P9). Reads the current title, strips a trailing dot, and re-adds
+ * it when Project::changed(). Called at load, whenever the changed state flips, and after the
+ * desk's own New, Open, Save and Save As. */
+void applyProjectTitle();
+
+/* React to the window's own title changing, so the Project's dot survives every re-title OBS makes
+ * (launch, scene-collection switch, profile switch, Studio Mode toggle): OBS sets the title itself
+ * and would otherwise wipe the dot after the desk has added it. Doing this from the window's
+ * windowTitleChanged signal, rather than after each event, does not depend on event ordering.
+ * Connects once; call at module load. */
+void followTitleBar();
+
+/* The close prompt: the same Save / Discard / Cancel set the New, Open and Recent actions use,
+ * for the app being closed with unsaved work (P9/§4.4). True when the close may go on; false
+ * when the operator cancelled, so the caller must keep the app open. */
+bool confirmProjectClose(QWidget *parent);
 
 } // namespace desk

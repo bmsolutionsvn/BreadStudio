@@ -1,6 +1,7 @@
 #include "InputModel.hpp"
 
 #include "AudioBed.hpp"
+#include "Desk.hpp"
 #include "OutputEngine.hpp"
 
 #include <obs-frontend-api.h>
@@ -449,6 +450,7 @@ OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *s
 		}
 	}
 
+	markProjectChanged();
 	return input;
 }
 
@@ -462,6 +464,7 @@ bool renameInput(obs_source_t *input, const char *name)
 		return false;
 	}
 	obs_source_set_name(input, name);
+	markProjectChanged();
 	return true;
 }
 
@@ -559,6 +562,7 @@ void deleteInput(obs_source_t *input)
 
 	/* OBS's main window takes the scene out of its list when it is removed */
 	obs_source_remove(input);
+	markProjectChanged();
 }
 
 static QListWidget *sceneList()
@@ -650,6 +654,7 @@ RemovedLayer removeLayer(obs_source_t *host, int64_t id)
 	obs_sceneitem_get_crop(item, &removed.crop);
 
 	obs_sceneitem_remove(item);
+	markProjectChanged();
 	return removed;
 }
 
@@ -685,6 +690,7 @@ bool restoreLayer(obs_source_t *host, const RemovedLayer &removed)
 		return false;
 	}
 
+	markProjectChanged();
 	return true;
 }
 
@@ -692,6 +698,7 @@ void setLayerVisible(obs_source_t *host, int64_t id, bool visible)
 {
 	if (obs_sceneitem_t *item = findLayer(host, id)) {
 		obs_sceneitem_set_visible(item, visible);
+		markProjectChanged();
 	}
 }
 
@@ -710,6 +717,7 @@ void moveLayer(obs_source_t *host, int64_t id, bool up)
 	}
 
 	obs_sceneitem_set_order(findLayer(host, id), up ? OBS_ORDER_MOVE_UP : OBS_ORDER_MOVE_DOWN);
+	markProjectChanged();
 }
 
 } // namespace desk

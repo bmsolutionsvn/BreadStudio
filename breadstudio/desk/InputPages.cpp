@@ -76,6 +76,7 @@ void addDeinterlacing(QFormLayout *form, obs_source_t *base)
 
 	QObject::connect(combo, &QComboBox::currentIndexChanged, combo, [base, combo](int) {
 		obs_source_set_deinterlace_mode(base, (enum obs_deinterlace_mode)combo->currentData().toInt());
+		markProjectChanged();
 	});
 
 	form->addRow(text("Settings.Deinterlacing"), combo);
@@ -101,6 +102,7 @@ void addRestart(QFormLayout *form, obs_source_t *base, QWidget *parent)
 		OBSDataAutoRelease now = obs_source_get_settings(base);
 		obs_data_set_bool(now, "restart_on_activate", on);
 		obs_source_update(base, now);
+		markProjectChanged();
 	});
 	form->addRow(check);
 }
@@ -267,8 +269,12 @@ void clearLayout(QLayout *layout)
 QWidget *makeFilterView(obs_source_t *filter)
 {
 	OBSDataAutoRelease settings = obs_source_get_settings(filter);
-	return new OBSPropertiesView(settings.Get(), filter, (PropertiesReloadCallback)obs_source_properties,
-				     (PropertiesUpdateCallback) nullptr, (PropertiesVisualUpdateCb)obs_source_update);
+	auto *view = new OBSPropertiesView(settings.Get(), filter, (PropertiesReloadCallback)obs_source_properties,
+					   (PropertiesUpdateCallback) nullptr,
+					   (PropertiesVisualUpdateCb)obs_source_update);
+	/* the panel changes the filter as the operator edits it, which is a change to the show (P9) */
+	QObject::connect(view, &OBSPropertiesView::Changed, view, [] { markProjectChanged(); });
+	return view;
 }
 
 /* a number box in a form: shows `value`, and writes each change through `set` */
@@ -281,6 +287,9 @@ void addSpin(QFormLayout *form, const QString &label, double value, double min, 
 	spin->setSingleStep(step);
 	spin->setValue(value);
 	QObject::connect(spin, &QDoubleSpinBox::valueChanged, parent, [set = std::move(set)](double v) { set(v); });
+	/* the transform is applied as it is typed; the Project is marked changed when the edit
+	 * finishes, so the title does not flicker on every keystroke (P9) */
+	QObject::connect(spin, &QDoubleSpinBox::editingFinished, parent, [] { markProjectChanged(); });
 	form->addRow(label, spin);
 }
 
@@ -291,6 +300,7 @@ void addCrop(QFormLayout *form, const QString &label, int value, QWidget *parent
 	spin->setRange(0, 100000);
 	spin->setValue(value);
 	QObject::connect(spin, &QSpinBox::valueChanged, parent, [set = std::move(set)](int v) { set(v); });
+	QObject::connect(spin, &QSpinBox::editingFinished, parent, [] { markProjectChanged(); });
 	form->addRow(label, spin);
 }
 
@@ -415,6 +425,7 @@ QWidget *makeFilterPage(obs_source_t *input, const char *filterId)
 	}
 
 	QObject::connect(apply, &QCheckBox::toggled, page, [base, name, filterId, panel, show](bool on) {
+		markProjectChanged();
 		if (!on) {
 			clearLayout(panel);
 			OBSSourceAutoRelease filter = obs_source_get_filter_by_name(base, name.c_str());
@@ -521,6 +532,7 @@ private:
 			return;
 		}
 		obs_source_filter_add(base, filter);
+		markProjectChanged();
 
 		refresh();
 		selectName(QString::fromUtf8(name.c_str()));
@@ -535,6 +547,7 @@ private:
 		OBSSourceAutoRelease filter = obs_source_get_filter_by_name(base, item->text().toUtf8().constData());
 		if (filter) {
 			obs_source_filter_remove(base, filter);
+			markProjectChanged();
 		}
 		refresh();
 	}
@@ -789,10 +802,12 @@ QWidget *makeAdvanced(obs_source_t *input)
 	auto *outer = new QVBoxLayout(page);
 
 	OBSDataAutoRelease settings = obs_source_get_settings(base);
-	outer->addWidget(
-		new OBSPropertiesView(settings.Get(), base.Get(), (PropertiesReloadCallback)obs_source_properties,
-				      (PropertiesUpdateCallback) nullptr, (PropertiesVisualUpdateCb)obs_source_update),
-		1);
+	auto *panel = new OBSPropertiesView(settings.Get(), base.Get(), (PropertiesReloadCallback)obs_source_properties,
+					    (PropertiesUpdateCallback) nullptr,
+					    (PropertiesVisualUpdateCb)obs_source_update);
+	/* the panel changes the base's own settings as the operator edits them, a change to the show (P9) */
+	QObject::connect(panel, &OBSPropertiesView::Changed, panel, [] { markProjectChanged(); });
+	outer->addWidget(panel, 1);
 
 	auto *absent = new QLabel(text("Settings.Advanced.Absent"), page);
 	absent->setWordWrap(true);

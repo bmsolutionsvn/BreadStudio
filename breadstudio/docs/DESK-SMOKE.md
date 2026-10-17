@@ -232,12 +232,13 @@ shown — OBS has no such source property.
 Run after every upstream merge: these are object-name lookups into OBS's window,
 and an upstream rename breaks them silently.
 
-1. The ☰ menu holds **File** (Settings…, Exit), **Profile**, **Scene Collection**
-   and **Projector**, and nothing else. No Edit, View, Docks, Tools or Help.
+1. The ☰ menu holds **Project**, **File** (Settings…, About, Exit) and **Projector**,
+   and nothing else. No Profile or Scene Collection, and no Edit, View, Docks,
+   Tools or Help.
 2. OBS's own menu bar is not visible anywhere, and its Scenes and Sources
    toolbars are gone.
-3. File holds no Show Recordings, Remux, Show Settings Folder or Show Profile
-   Folder.
+3. File holds Settings…, About and Exit, and no Show Recordings, Remux, Show
+   Settings Folder or Show Profile Folder.
 4. Projector → Multiview opens a Multiview projector window, and the monitor
    list it offers is the one from launch — a monitor plugged in after
    BreadStudio started is not offered until it restarts (the View menu it used
@@ -258,6 +259,23 @@ and an upstream rename breaks them silently.
     choice survives a restart.
 12. The input bar and Mixer are at the bottom on every launch, whatever the saved
     dock state.
+
+## K. The Project
+
+Spec: `2026-10-16-breadstudio-cleanup-design.md` §2.2 and §4.
+
+1. The ☰ has a **Project** menu with New, Open…, Save, Save As…, Recent, Reveal
+   in Explorer, and no Profile or Scene Collection menu.
+2. A show is built, **Save As…** writes a `.bstd`, the app is closed, and
+   **Open…** brings back the inputs, order, layers, levels, bus sends and AFV.
+3. **Save** after a change writes without asking for a path, and the title bar
+   shows ` •` until it does.
+4. A `.bstd` opened by hand in Windows Explorer, or by any zip tool, shows
+   `project.json`, `profile/` and `scenes/`.
+5. **Save As…** with the media tick packs the media, and the file opens on
+   another machine with every file in place.
+6. **Save As…** with **Leave out the stream key** ticked writes a copy whose
+   profile carries no stream details (service, server, key).
 
 ## Before a run
 

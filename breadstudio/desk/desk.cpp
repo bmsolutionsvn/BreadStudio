@@ -3,8 +3,10 @@
 #include <obs.hpp>
 
 #include <QApplication>
+#include <QEvent>
 #include <QString>
 #include <QTimer>
+#include <QWidget>
 
 #include "AudioBed.hpp"
 #include "BusMeters.hpp"
@@ -43,7 +45,7 @@ static InputBar *bar = nullptr; /* owned by its dock */
 static Mixer *mixer = nullptr; /* owned by its dock */
 
 /* the one Project the desk has open (P2) */
-static Project *project = nullptr;
+static Project *theProject = nullptr;
 
 /* declared here, defined with the other save callbacks: the EXIT case takes it off */
 static void onProjectSaved(obs_data_t *save_data, bool saving, void *private_data);
@@ -62,6 +64,43 @@ void inputsChanged()
 	mixer->rebuild();
 	OutputEngine::instance().refreshSources();
 }
+
+Project *project()
+{
+	return theProject;
+}
+
+void markProjectChanged()
+{
+	if (theProject) {
+		theProject->markChanged();
+	}
+	applyProjectTitle();
+}
+
+/* The desk screens the main window's close so unsaved work is not lost silently (P9/§4.4). OBS's
+ * own close path has no cancelable hook: OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN and _EXIT both fire
+ * inside OBSBasic::closeWindow(), after the close is already decided. A QCloseEvent is
+ * cancellable, so the desk filters it on the main window: on Cancel the event is ignored and eaten
+ * (it never reaches OBSBasic::closeEvent), so the window stays; on Save or Discard it is let
+ * through and OBS's own close runs. */
+class CloseGuard : public QObject {
+public:
+	explicit CloseGuard(QObject *parent) : QObject(parent) {}
+
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (event->type() != QEvent::Close) {
+			return false;
+		}
+		auto *window = qobject_cast<QWidget *>(watched);
+		if (!window || confirmProjectClose(window)) {
+			return false;
+		}
+		event->ignore();
+		return true;
+	}
+};
 } // namespace desk
 
 /* OBS raises no frontend event when a scene is renamed, so follow libobs's own signal.
@@ -158,8 +197,8 @@ static void onEvent(enum obs_frontend_event event, void *)
 		/* the save callback is taken off before the Project it writes back to is
 		 * released, so a save during teardown cannot call a freed object */
 		obs_frontend_remove_save_callback(onProjectSaved, nullptr);
-		delete project;
-		project = nullptr;
+		delete theProject;
+		theProject = nullptr;
 		break;
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
 		inputsChanged();
@@ -240,9 +279,11 @@ static void saveOutputs(obs_data_t *data, bool saving, void *)
  * itself is absorbed by the Project, so its own write does not bring the dot back. */
 static void onProjectSaved(obs_data_t *, bool saving, void *)
 {
-	if (project) {
-		project->noteObSave(saving);
+	if (theProject) {
+		theProject->noteObSave(saving);
 	}
+	/* an operator edit marked the Project changed through that callback; show it (P9) */
+	applyProjectTitle();
 }
 
 bool obs_module_load(void)
@@ -258,7 +299,14 @@ bool obs_module_load(void)
 	obs_frontend_add_dock_by_id(MixerDockId, obs_module_text("Mixer"), mixer);
 	signal_handler_connect(obs_get_signal_handler(), "source_rename", onSourceRename, nullptr);
 
-	project = new Project();
+	theProject = new Project();
+
+	/* the main window owns its close guard, so it lives exactly as long as the window does */
+	if (auto *main = static_cast<QObject *>(obs_frontend_get_main_window())) {
+		main->installEventFilter(new CloseGuard(main));
+	}
+	/* the dot follows every title OBS sets, whatever the event order (P9) */
+	followTitleBar();
 
 	obs_frontend_add_event_callback(onEvent, nullptr);
 

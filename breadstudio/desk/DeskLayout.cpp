@@ -1,18 +1,30 @@
 #include "DeskLayout.hpp"
 #include "Desk.hpp"
+#include "Project.hpp"
 
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 
 #include <QAction>
+#include <QCheckBox>
+#include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QKeySequence>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QToolBar>
+#include <QUrl>
+#include <QVBoxLayout>
 
 #include <cstring>
+#include <string>
 
 namespace desk {
 
@@ -194,12 +206,12 @@ void hideObsStreamButton()
 	button->setVisible(false);
 }
 
-/* The menus the ☰ keeps (K2). Edit, View, Docks, Tools and Help are dropped: the desk's
- * surface is the desk, and those menus reach OBS's scene editor, docks and help. */
+/* The menu bar menus the ☰ keeps (K2): only File. Edit, View, Docks, Tools and Help are
+ * dropped - the desk's surface is the desk, and those menus reach OBS's scene editor, docks and
+ * help - and OBS's Profile and Scene Collection menus are dropped too, because the desk's own
+ * Project replaces both (P3). The desk's Project menu is added by obsMainMenu() before File. */
 static const char *const KeptMenus[] = {
 	"menu_File",
-	"profileMenu",
-	"sceneCollectionMenu",
 };
 
 /* The File entries that stay outside the desk's job (cleanup spec §6). */
@@ -233,6 +245,215 @@ static bool keptMenu(const char *name)
 	return false;
 }
 
+/* the disk folder holding the open Project, for Reveal in Explorer; empty when there is none */
+static QString projectFolder()
+{
+	Project *open = project();
+	if (!open || open->path().empty()) {
+		return {};
+	}
+	return QFileInfo(QString::fromStdString(open->path())).absolutePath();
+}
+
+static bool saveProjectAs(QWidget *parent);
+
+/* The open Project is written, falling through to Save As when it has no path yet (P2/P3).
+ * False when nothing was written: a cancelled dialog, or an error the operator was shown. */
+static bool saveProject(QWidget *parent)
+{
+	Project *open = project();
+	if (!open) {
+		return false;
+	}
+	if (open->path().empty()) {
+		return saveProjectAs(parent);
+	}
+	std::string error;
+	if (!open->save(error)) {
+		QMessageBox::warning(parent, text("Project.Save"), QString::fromStdString(error));
+		return false;
+	}
+	applyProjectTitle();
+	return true;
+}
+
+/* Save As: the path, then the two ticks (P6, P7). The ticks belong to the save rather than the
+ * file browser, so they are asked in their own small dialog. */
+static bool saveProjectAs(QWidget *parent)
+{
+	Project *open = project();
+	if (!open) {
+		return false;
+	}
+	const QString start = open->path().empty() ? QString() : QString::fromStdString(open->path());
+	const QString path =
+		QFileDialog::getSaveFileName(parent, text("Project.SaveAs"), start, QStringLiteral("*.bstd"));
+	if (path.isEmpty()) {
+		return false;
+	}
+
+	QDialog options(parent);
+	options.setWindowTitle(text("Project.SaveAs"));
+	auto *layout = new QVBoxLayout(&options);
+	auto *media = new QCheckBox(text("Project.Media"), &options);
+	auto *streamKey = new QCheckBox(text("Project.StreamKey"), &options);
+	layout->addWidget(media);
+	layout->addWidget(streamKey);
+	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &options);
+	QObject::connect(buttons, &QDialogButtonBox::accepted, &options, &QDialog::accept);
+	QObject::connect(buttons, &QDialogButtonBox::rejected, &options, &QDialog::reject);
+	layout->addWidget(buttons);
+	if (options.exec() != QDialog::Accepted) {
+		return false;
+	}
+
+	/* the key is carried by default; "Leave out the stream key" ticked writes the copy without
+	 * it (P7) */
+	std::string error;
+	if (!open->saveAs(path.toStdString(), media->isChecked(), !streamKey->isChecked(), error)) {
+		QMessageBox::warning(parent, text("Project.SaveAs"), QString::fromStdString(error));
+		return false;
+	}
+	applyProjectTitle();
+	return true;
+}
+
+/* The P2 guard before New or Open replaces the open show: Save, Discard or Cancel. True when it
+ * is safe to go on, false to leave everything as it was. */
+static bool confirmDiscard(QWidget *parent)
+{
+	Project *open = project();
+	if (!open || !open->changed()) {
+		return true;
+	}
+	const QMessageBox::StandardButton answer =
+		QMessageBox::warning(parent, text("Project"), text("Project.Unsaved"),
+				     QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+	if (answer == QMessageBox::Discard) {
+		return true;
+	}
+	if (answer == QMessageBox::Save) {
+		return saveProject(parent);
+	}
+	return false; /* Cancel, or the dialog was dismissed */
+}
+
+static void openProject(QWidget *parent, const QString &path)
+{
+	Project *open = project();
+	if (!open || path.isEmpty() || !confirmDiscard(parent)) {
+		return;
+	}
+	std::string error;
+	if (!open->open(path.toStdString(), error)) {
+		QMessageBox::warning(parent, text("Project.Open"), QString::fromStdString(error));
+		return;
+	}
+	applyProjectTitle();
+}
+
+/* The desk's own Project menu (P3), built once with the ☰ and added before File. Every action
+ * reads the one Project when it runs, because the Project is made after obs_module_load and
+ * released at EXIT. */
+static QMenu *buildProjectMenu(QWidget *parent)
+{
+	auto *menu = new QMenu(text("Project"), parent);
+
+	QAction *newAction = menu->addAction(text("Project.New"));
+	QObject::connect(newAction, &QAction::triggered, [parent] {
+		if (project() && confirmDiscard(parent)) {
+			project()->createNew();
+			applyProjectTitle();
+		}
+	});
+
+	QAction *openAction = menu->addAction(text("Project.Open"));
+	openAction->setShortcut(QKeySequence::Open);
+	QObject::connect(openAction, &QAction::triggered, [parent] {
+		const QString path =
+			QFileDialog::getOpenFileName(parent, text("Project.Open"), QString(), QStringLiteral("*.bstd"));
+		openProject(parent, path);
+	});
+
+	QAction *saveAction = menu->addAction(text("Project.Save"));
+	saveAction->setShortcut(QKeySequence::Save);
+	QObject::connect(saveAction, &QAction::triggered, [parent] { saveProject(parent); });
+
+	QAction *saveAsAction = menu->addAction(text("Project.SaveAs"));
+	QObject::connect(saveAsAction, &QAction::triggered, [parent] { saveProjectAs(parent); });
+
+	menu->addSeparator();
+
+	/* the recent list changes as Projects are opened and written, so it is rebuilt every time
+	 * the submenu is shown (P8) */
+	QMenu *recentMenu = menu->addMenu(text("Project.Recent"));
+	QObject::connect(recentMenu, &QMenu::aboutToShow, recentMenu, [recentMenu, parent] {
+		recentMenu->clear();
+		Project *open = project();
+		if (!open) {
+			return;
+		}
+		for (const std::string &path : open->recent()) {
+			QAction *item = recentMenu->addAction(QString::fromStdString(path));
+			QObject::connect(item, &QAction::triggered,
+					 [parent, path] { openProject(parent, QString::fromStdString(path)); });
+		}
+	});
+
+	QAction *revealAction = menu->addAction(text("Project.Reveal"));
+	QObject::connect(revealAction, &QAction::triggered, [parent] {
+		const QString folder = projectFolder();
+		if (!folder.isEmpty()) {
+			QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+		}
+	});
+
+	return menu;
+}
+
+bool confirmProjectClose(QWidget *parent)
+{
+	/* the same wording and the same three outcomes as New and Open use before they replace the
+	 * open show */
+	return confirmDiscard(parent);
+}
+
+void applyProjectTitle()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main) {
+		return;
+	}
+
+	/* OBS owns the base title and re-sets it as it likes; the desk only owns the dot. Keep the
+	 * base and strip any dot first, so applying it twice does not leave two. */
+	const QString dot = QString::fromUtf8(" \xE2\x80\xA2"); /* " " + U+2022 */
+	QString title = main->windowTitle();
+	while (title.endsWith(dot)) {
+		title.chop(dot.size());
+	}
+
+	const Project *open = project();
+	if (open && open->changed()) {
+		title += dot;
+	}
+	/* Setting the same title again would emit windowTitleChanged, which re-applies the dot; stop
+	 * when nothing would change, so the signal settles instead of looping. */
+	if (title != main->windowTitle()) {
+		main->setWindowTitle(title);
+	}
+}
+
+void followTitleBar()
+{
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main) {
+		blog(LOG_WARNING, "[bread-desk] the main window was not found; the Project's dot is not followed");
+		return;
+	}
+	QObject::connect(main, &QMainWindow::windowTitleChanged, main, [] { applyProjectTitle(); });
+}
+
 QMenu *obsMainMenu()
 {
 	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -247,6 +468,10 @@ QMenu *obsMainMenu()
 	static QMenu *popup = nullptr;
 	if (!popup) {
 		popup = new QMenu(main);
+
+		/* the desk's own Project menu, before OBS's File (P3) */
+		popup->addMenu(buildProjectMenu(main));
+
 		for (QAction *action : bar->actions()) {
 			QMenu *menu = action->menu();
 			if (!menu) {
@@ -257,8 +482,8 @@ QMenu *obsMainMenu()
 				continue;
 			}
 			bool dropped = false;
-			for (const char *name : DroppedFileItems) {
-				QAction *item = main->findChild<QAction *>(name);
+			for (const char *itemName : DroppedFileItems) {
+				QAction *item = main->findChild<QAction *>(itemName);
 				if (item && menu->actions().contains(item)) {
 					menu->removeAction(item);
 					dropped = true;

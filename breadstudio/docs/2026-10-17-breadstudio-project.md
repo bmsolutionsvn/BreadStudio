@@ -281,7 +281,7 @@ Its actions call the `Project` object; `Save As…` asks for a path with `QFileD
 3. **Save** after a change writes without asking for a path, and the title bar shows ` •` until it does;
 4. a `.bstd` opened by hand in Windows Explorer, or by any zip tool, shows `project.json`, `profile/` and `scenes/`;
 5. **Save As…** with the media tick packs the media, and the file opens on another machine with every file in place;
-6. **Save As…** with the stream-key tick off writes a copy whose profile carries no stream key.
+6. **Save As…** with **Leave out the stream key** ticked writes a copy whose profile carries no stream details (service, server, key).
 
 **Step 4:** build, `check-edits.ps1` exit 0, all six test exes exit 0, clang-format clean, every touched file ends with a newline.
 

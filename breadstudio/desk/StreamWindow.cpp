@@ -64,7 +64,8 @@ StreamWindow::StreamWindow(QWidget *parent) : QDialog(parent)
 
 void StreamWindow::accept()
 {
-	OutputsConfig config = OutputEngine::instance().config();
+	const OutputsConfig before = OutputEngine::instance().config();
+	OutputsConfig config = before;
 	for (int d = 0; d < DestinationCount; d++) {
 		const Row &row = rows[(size_t)d];
 		Destination &destination = config.destinations[(size_t)d];
@@ -76,6 +77,11 @@ void StreamWindow::accept()
 		destination.key = row.key->text().trimmed().toStdString();
 	}
 	OutputEngine::instance().apply(config);
+	/* only a real change marks the Project; opening the window and pressing OK unchanged does
+	 * not (P9) */
+	if (!(config.outputs == before.outputs && config.destinations == before.destinations)) {
+		markProjectChanged();
+	}
 	QDialog::accept();
 }
 

@@ -48,6 +48,12 @@ void PropertiesPage::build()
 	auto *view =
 		new OBSPropertiesView(settings.Get(), source.Get(), (PropertiesReloadCallback)obs_source_properties,
 				      (PropertiesUpdateCallback) nullptr, (PropertiesVisualUpdateCb)obs_source_update);
+	/* The panel changes a source that already exists as the operator edits it, which is a change
+	 * to the show (P9). The page for a not-yet-made input edits a throwaway stand-in that is not
+	 * the show until OK makes it, so that one is left unmarked. */
+	if (before) {
+		QObject::connect(view, &OBSPropertiesView::Changed, view, [] { markProjectChanged(); });
+	}
 	layout->addWidget(view);
 }
 
