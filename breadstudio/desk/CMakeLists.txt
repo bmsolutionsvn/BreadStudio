@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28...3.30)
 
 find_package(Qt6 REQUIRED Widgets)
+find_package(Qt6 REQUIRED Xml)
 find_package(ZLIB REQUIRED)
 
 add_library(bread-desk MODULE)
@@ -158,5 +159,15 @@ else()
 endif()
 set_target_properties(
   bread-project-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
+)
+
+# The vMix preset reader: no OBS, and the one desk test that needs Qt (Qt6::Xml for QDomDocument).
+add_executable(bread-vmix-test test/VmixPresetTest.cpp VmixPreset.cpp)
+target_include_directories(bread-vmix-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bread-vmix-test PRIVATE Qt6::Xml)
+target_compile_definitions(bread-vmix-test PRIVATE VMIX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
+set_target_properties(
+  bread-vmix-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/desk/test-bin" FOLDER plugins/bread-desk
 )

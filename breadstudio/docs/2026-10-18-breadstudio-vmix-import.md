@@ -177,6 +177,35 @@ resolve. **Do not** read children — the presets carry inputs as attributes onl
 breadstudio: read a vMix preset into a plain list, and report what it cannot back
 ```
 
+**As built — the plan corrected by the file.** Written against the real presets,
+three things above turned out wrong; the code follows the file:
+
+- **Geometry is not on `<Input>` as flat numbers.** vMix keeps an input's
+  placement in the embedded `Positions`/`PositionsExtended` matrix — a relative
+  Pan/Zoom/Rotate, one `MatrixPosition` per output — not as flat
+  `x`/`y`/`width`/`height`/`rotation`/`crop` attributes. It **is** readable:
+  Task 1 carries the matrix raw (`panX/panY`, `zoomX/zoomY`, `rotateX/Y/Z`,
+  `matrixMoved`, and `matrixCount` — how many outputs the preset holds), and
+  **Task 2 converts it** into the base's `obs_transform_info`, given the output
+  resolution and the source's own pixel size, which the reader cannot know. What
+  the desk cannot put on a base — a mirror, a nested `MultiplyPosition`, a
+  border, a rotate origin, and crop — makes an applied matrix an approximation,
+  so Task 2 reports the shot (V4). A preset with more than one output (as all
+  four of the owner's are) has no single matrix for the desk's one Program
+  output, so Task 2 takes Program and reports the rest.
+- **The bar's limit is not on the reader.** `readVmixPreset` carries no bar, so
+  the over-limit split (V5) is a second pure function, `limitVmixInputs(result,
+  limit)`, which the desk calls with its own limit; the test passes N in.
+- **The Type table is what the archive names** (the workspace roadmap §10):
+  0 Video, 1 Image, 2 `.xaml` Title, 5 Camera, 7 Audio Input, 12 Colour,
+  13 Audio File, 4000 NDI, 9000 GT Title; 14 List, 21 Image Sequence and 6000
+  Video Call are named but have no desk equivalent and are reported; 15, 22 and
+  100 cannot be named — read from `OriginalTitle` and reported, and they make no
+  entry of their own (V7). Browser and Desktop Capture are in §5.2's table but in
+  none of the presets, so no `Type` number is evidenced for them: they fall to
+  Unknown and are reported rather than guessed. An input's `Position` is a
+  playback position, not its order; the order is document order.
+
 ---
 
 ### Task 2: the building half, through the desk's own `InputModel`

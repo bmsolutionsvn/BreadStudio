@@ -1,0 +1,8 @@
+<XML>
+  <Version>9</Version>
+  <Input Type="12" Position="0" RangeStart="0" RangeStop="0" State="1" Title="One" OriginalTitle="Colour" ShortcutMappings="" Key="aaaaaaaa-1111-1111-1111-111111111111" Loop="False" VolumeF="1" Muted="False" BalanceF="0" AspectRatio="100" Category="1" MouseClickAction="0" Collapsed="False" Solo="False" HeadphonesVolumeF="1" BusMaster="True" FrameDelay="0" Colour="0" ColourBars="False" />
+  <Input Type="1" Position="0" RangeStart="0" RangeStop="0" State="1" Title="Two" OriginalTitle="two.png" ShortcutMappings="" Key="bbbbbbbb-2222-2222-2222-222222222222" Loop="False" VolumeF="0.5" Muted="True" BalanceF="0" AspectRatio="100" Category="1" MouseClickAction="0" Collapsed="False" Solo="False" HeadphonesVolumeF="1" BusMaster="True" FrameDelay="0" />
+  <Input Type="0" Position="12000" RangeStart="0" RangeStop="90000" State="1" Title="Three" OriginalTitle="three.mp4" ShortcutMappings="" Key="cccccccc-3333-3333-3333-333333333333" Loop="True" VolumeF="1" Muted="True" BalanceF="0" AspectRatio="100" Category="1" MouseClickAction="0" Collapsed="False" Solo="False" HeadphonesVolumeF="1" BusMaster="True" FrameDelay="0" />
+  <Input Type="9000" Position="0" RangeStart="0" RangeStop="0" State="1" Title="Four" OriginalTitle="four.gtzip" ShortcutMappings="" Key="dddddddd-4444-4444-4444-444444444444" Loop="False" VolumeF="1" Muted="True" BalanceF="0" AspectRatio="100" Category="1" MouseClickAction="0" Collapsed="False" Solo="False" HeadphonesVolumeF="1" BusMaster="True" FrameDelay="0" XML="&lt;items /&gt;" />
+  <State Main="1" Preview="2" />
+</XML>
