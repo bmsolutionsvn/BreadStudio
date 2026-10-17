@@ -54,15 +54,50 @@ jobs:
         shell: pwsh
         run: ./breadstudio/packaging/Rename-Product.test.ps1
 
-  # The build is not here yet, and deliberately: the tree cannot build alone.
-  #
-  #   * breadstudio/omt-hx/CMakeLists.txt FATAL_ERRORs without a built OMT-HX
-  #     checkout at ../OMT-HX, and OMT-HX is a sibling repository, not a
-  #     submodule of this one;
-  #   * OBS's three submodules (plugins/obs-browser, plugins/obs-websocket and
-  #     deps/libdshowcapture) would each have to be checked out and, for the
-  #     ones the desk does not use, dropped.
-  #
-  # Both are being done so the repository builds from a clean clone. When they
-  # land, this job builds windows-x64 with breadstudio/build.ps1 and uploads the
-  # built program and its plugins as an artifact.
+  build:
+    name: Build windows-x64
+
+    # The same image as the gates job: Visual Studio 2022 and the Windows SDK the
+    # windows-x64 preset names, plus the .NET 8 SDK that libomt's native AOT
+    # build needs. A full OBS build takes the better part of an hour.
+    runs-on: windows-2025
+
+    steps:
+      - name: Check out the repository and its history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # breadstudio/omt-hx will not configure without a built OMT-HX checkout at
+      # ../OMT-HX, and OMT-HX is its own repository. It is cloned beside this one
+      # and its libomt built from the pinned upstream sources.
+      - name: Check out OMT-HX beside the repository
+        shell: pwsh
+        run: |
+          $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'OMT-HX'
+          git clone --depth 1 https://github.com/bmsolutionsvn/OMT-HX $sibling
+          Write-Host "OMT-HX is at $sibling"
+
+      - name: Build libomt
+        shell: pwsh
+        run: |
+          $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'OMT-HX'
+          & (Join-Path $sibling 'scripts/build-libomt.ps1')
+
+      # Configures the windows-x64 preset with the pinned OBS version and
+      # ENABLE_WHATSNEW=OFF, then builds it.
+      - name: Configure and build
+        shell: pwsh
+        run: ./breadstudio/build.ps1
+
+      - name: Upload the built program and its plugins
+        uses: actions/upload-artifact@v4
+        with:
+          name: BreadStudio-windows-x64
+          if-no-files-found: error
+          path: |
+            build_x64/rundir/RelWithDebInfo/bin/64bit/BreadStudio.exe
+            build_x64/rundir/RelWithDebInfo/obs-plugins/64bit/**
+
+  # The installer step of the S0 design lands with the installer itself
+  # (breadstudio/installer/, an Inno Setup script, not written yet).
