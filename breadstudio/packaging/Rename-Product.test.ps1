@@ -53,3 +53,7 @@ try {
 }
 
 Write-Host 'Rename-Product: all tests passed'
+
+# Say the result explicitly: a script that ends without this exits with whatever
+# $LASTEXITCODE a child command happened to leave behind.
+exit 0

@@ -73,3 +73,8 @@ try {
 }
 
 Write-Host 'check-edits: all tests passed'
+
+# Every assertion above ran the check in a child process, so $LASTEXITCODE still
+# holds the last one's code - and the last assertion expects a failure, so pwsh
+# would leave this script exiting 1 with every test green. Say it explicitly.
+exit 0
