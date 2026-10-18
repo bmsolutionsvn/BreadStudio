@@ -208,7 +208,8 @@ it unchanged.
 ### 4.2 What it shows
 
 The title's composition, scaled to the canvas when the canvas is not the
-title's size, with transparency kept (straight alpha into OBS). Fields show
+title's size, with transparency kept: a title over Program looks as it does
+over vMix's output, with no dark or light fringe on soft edges. Fields show
 their current values (§4.3); clocks run (§4.5). A title with nothing changing
 costs no drawing per frame — it is redrawn only when a value, a clock or a
 picture changes.
