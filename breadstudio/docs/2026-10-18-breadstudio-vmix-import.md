@@ -47,7 +47,18 @@ One unit, `VmixPreset`, in two halves on purpose (spec §5.4):
 | Overlays 1–4 | nothing | no overlay bus; the inputs are still imported, the routing reported |
 | active and preview numbers | the desk's initial Program and Preview | applied once the inputs exist |
 | transitions | nothing | the desk uses OBS's; reported |
-| stream, output, recording settings | the Project's settings half | carried where OBS has the same setting |
+| stream, output, recording settings | the Project's settings half | carried where OBS has the same setting — **not implemented; see "Not carried" below** |
+
+**Not carried.** The table's last row — stream, output and recording settings — is
+not implemented, and no honest mapping exists. The reader reads no service, key,
+encoder or recording path, and the builder applies none, so the new Project keeps
+OBS's own defaults. vMix's settings are vMix's own shape — `StreamingSettings`
+holds up to three destinations with embedded URLs and keys, `RecordingSettings` a
+path and a format, `OutputFormat` the external and NDI outputs — and OBS's stream
+service, encoders and output modes are not that; a fabricated map would put a
+wrong setting on air, so none is written. The import raises one report row naming
+the settings as not imported, so the operator is told rather than left to find
+out on air (V4).
 
 **Unknown types.** An input `Type` this spec cannot name (15, 22, 100 are the
 known unknowns) is read from the input's `OriginalTitle` and **put on the
@@ -343,6 +354,19 @@ one file it names that needed no change:
 - **`DeskLayout.hpp` needed no change.** The entry and its whole flow are static
   to `DeskLayout.cpp` (a new `importVmixPreset` and one action in
   `buildProjectMenu`), so no declaration is added to the header.
+- **A fresh Project that could not be made refuses the import.** `Project::createNew()`
+  now reports failure (`bool createNew(std::string &error)`) instead of returning
+  void, and the import checks it before building. Before this, an OBS refusal to
+  create the profile or the collection left the open show live and the build would
+  append the preset's inputs to it — which a later Save could write over the
+  operator's own file. Now the open Project is untouched and the failure is
+  surfaced verbatim, through the same message path a read failure uses. The other
+  caller, the New action, surfaces it the same way: the open show is left untouched
+  either way and there is nothing else the caller can do.
+- **The stream, output and recording settings are not imported, and the report says
+  so.** The reader and builder carry none (see "Not carried" above), so the import
+  appends one preset-wide report row naming them; the operator is told rather than
+  left to find out on air (V4).
 
 ---
 
@@ -356,9 +380,11 @@ shown by Task 3. V5 (the desk's own rules still hold: the loop refusal, more
 inputs than the bar, both reported) — Tasks 1 and 2. V6 (the same show on
 screen) — the smoke row. V7 (unknown types read from `OriginalTitle` and
 reported, never guessed; a changed format caught by the report and the smoke
-row, not a crash) — Task 1's unknown-type case and Task 4's row. §5.2's whole
-table — the mapping in Task 1 and the building in Task 2, one row per line of
-the table. §5.3 — Task 3. §5.4's two halves, `QDomDocument`, and "nothing here
+row, not a crash) — Task 1's unknown-type case and Task 4's row. §5.2's table
+**except its stream/output/recording row** — the mapping in Task 1 and the
+building in Task 2 cover one row per line of the table bar the last, which is not
+implemented; it is stated plainly under "Not carried" and named by a report row.
+§5.3 — Task 3. §5.4's two halves, `QDomDocument`, and "nothing here
 edits an OBS file, `UPSTREAM-EDITS.md` gains no row" — Tasks 1 and 2, checked
 in every task.
 
