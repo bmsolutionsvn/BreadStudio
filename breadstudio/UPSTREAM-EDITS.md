@@ -13,7 +13,7 @@ which is how a dependency the fork carries as ordinary files is listed once.
 
 - `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
 - `CMakePresets.json` - adds a `windows-x64-vs2022` preset, for a machine with Visual Studio 2022; OBS's own `windows-x64` preset, and the generator it names, are left as upstream has them
-- `plugins/CMakeLists.txt` - four lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi and breadstudio/srt to the build
+- `plugins/CMakeLists.txt` - five lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi, breadstudio/srt and breadstudio/gt to the build
 - `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is
 - `frontend/CMakeLists.txt` - program file is BreadStudio.exe; includes breadstudio/cmake/frontend.cmake
 - `frontend/widgets/OBSBasic.cpp` - window title shows BreadStudio and its version

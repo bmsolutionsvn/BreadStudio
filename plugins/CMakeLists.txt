@@ -109,3 +109,4 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/desk" "${CMAKE_BINARY_DIR}/bre
 add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/omt-hx" "${CMAKE_BINARY_DIR}/breadstudio/omt-hx")
 add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/ndi" "${CMAKE_BINARY_DIR}/breadstudio/ndi")
 add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/srt" "${CMAKE_BINARY_DIR}/breadstudio/srt")
+add_subdirectory("${CMAKE_SOURCE_DIR}/breadstudio/gt" "${CMAKE_BINARY_DIR}/breadstudio/gt")
