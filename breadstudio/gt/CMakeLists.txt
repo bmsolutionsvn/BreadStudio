@@ -11,7 +11,8 @@ find_package(ZLIB REQUIRED)
 add_library(bread-gt MODULE)
 add_library(OBS::bread-gt ALIAS bread-gt)
 
-target_sources(bread-gt PRIVATE gt.cpp GtPackage.cpp GtDocument.cpp GtRenderer.cpp GtText.cpp)
+target_sources(bread-gt PRIVATE gt.cpp gt-source.cpp GtPackage.cpp GtDocument.cpp GtFields.cpp GtClock.cpp
+                                 GtRenderer.cpp GtText.cpp)
 target_link_libraries(bread-gt PRIVATE OBS::libobs Qt6::Xml ZLIB::ZLIB d3d11 dxgi d2d1 dwrite windowscodecs)
 
 set_target_properties_obs(bread-gt PROPERTIES FOLDER plugins/bread-gt PREFIX "")
