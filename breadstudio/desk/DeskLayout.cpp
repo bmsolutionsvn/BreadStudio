@@ -1,6 +1,8 @@
 #include "DeskLayout.hpp"
 #include "Desk.hpp"
 #include "Project.hpp"
+#include "VmixPreset.hpp"
+#include "VmixReport.hpp"
 
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
@@ -11,6 +13,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDockWidget>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeySequence>
@@ -352,6 +355,52 @@ static void openProject(QWidget *parent, const QString &path)
 	applyProjectTitle();
 }
 
+/* Import vMix Preset… (V2/V3): read one .vmix and build it as a new, unsaved Project, leaving the
+ * open Project's file alone. The read comes before the Project is replaced, so a file that is not
+ * a preset leaves the open show untouched (spec §8); the P2 prompt comes first, because the import
+ * replaces the open show exactly as New does. */
+static void importVmixPreset(QWidget *parent)
+{
+	Project *open = project();
+	if (!open || !confirmDiscard(parent)) {
+		return;
+	}
+
+	const QString path =
+		QFileDialog::getOpenFileName(parent, text("Project.ImportVmix"), QString(), QStringLiteral("*.vmix"));
+	if (path.isEmpty()) {
+		return;
+	}
+
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		QMessageBox::warning(parent, text("Project.ImportVmix"), file.errorString());
+		return;
+	}
+
+	VmixPresetResult result;
+	std::string error;
+	if (!readVmixPreset(file.readAll().toStdString(), result, error)) {
+		/* the reader's own message, not a generic one, so the operator can tell what
+		 * the file was and how it failed (spec §7) */
+		QMessageBox::warning(parent, text("Project.ImportVmix"), QString::fromStdString(error));
+		return;
+	}
+
+	/* a fresh Project (V3), the preset built into it through the desk's own InputModel.
+	 * The desk's bar scrolls and holds every input (S1 §3), so it has no limit to pass:
+	 * 0 means no bar, and V5's over-limit split has nothing to trim here. */
+	open->createNew();
+	buildVmixPreset(result, 0);
+
+	/* the report is raised once, whatever the build produced: an empty report still says
+	 * the whole preset came across (§5.3). It must delete itself on close, as the desk's
+	 * other windows do (InputBar::openStreamWindow), or every import leaks a window. */
+	auto *report = new VmixReport(result.report, parent);
+	report->setAttribute(Qt::WA_DeleteOnClose);
+	report->show();
+}
+
 /* The desk's own Project menu (P3), built once with the ☰ and added before File. Every action
  * reads the one Project when it runs, because the Project is made after obs_module_load and
  * released at EXIT. */
@@ -381,6 +430,9 @@ static QMenu *buildProjectMenu(QWidget *parent)
 
 	QAction *saveAsAction = menu->addAction(text("Project.SaveAs"));
 	QObject::connect(saveAsAction, &QAction::triggered, [parent] { saveProjectAs(parent); });
+
+	QAction *importAction = menu->addAction(text("Project.ImportVmix"));
+	QObject::connect(importAction, &QAction::triggered, [parent] { importVmixPreset(parent); });
 
 	menu->addSeparator();
 

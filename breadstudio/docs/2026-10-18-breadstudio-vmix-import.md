@@ -322,6 +322,28 @@ clean, every touched file ends with a newline.
 breadstudio: import a vMix preset from the Project menu
 ```
 
+**As built — the plan corrected by the tree.** Two things Task 4 left unsaid, and
+one file it names that needed no change:
+
+- **The desk's bar limit is not named, and this desk has none.** Task 4 says
+  "build into a fresh Project" without saying what `buildVmixPreset`'s `limit`
+  should be, and there is no bar cap to take it from: the bar scrolls and holds
+  every input (S1 design §3, "Inputs are numbered 1…N"; the smoke row that makes
+  26 inputs scrolls rather than trims, and only OBS's multiview is capped, at 25).
+  So the import passes **0** — no bar — and V5's over-limit split has nothing to
+  trim here. The rule still exists and is proven by Task 1's test, which passes N
+  in directly.
+- **Nothing names the new Project after the preset.** V3 says the new Project is
+  "named after the preset", but `VmixPresetResult.name` is never set by the
+  reader, `Project` has no API to take a name (`createNew()` makes "Untitled"),
+  and Task 4's file list holds neither `Project` nor `VmixPreset`. The import
+  therefore makes the fresh, unsaved Project `createNew()` already makes, and the
+  operator names it when they first save. Carrying the preset's name needs a task
+  that owns `Project`.
+- **`DeskLayout.hpp` needed no change.** The entry and its whole flow are static
+  to `DeskLayout.cpp` (a new `importVmixPreset` and one action in
+  `buildProjectMenu`), so no declaration is added to the header.
+
 ---
 
 ## Self-review

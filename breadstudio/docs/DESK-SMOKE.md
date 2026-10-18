@@ -264,8 +264,8 @@ and an upstream rename breaks them silently.
 
 Spec: `2026-10-16-breadstudio-cleanup-design.md` §2.2 and §4.
 
-1. The ☰ has a **Project** menu with New, Open…, Save, Save As…, Recent, Reveal
-   in Explorer, and no Profile or Scene Collection menu.
+1. The ☰ has a **Project** menu with New, Open…, Save, Save As…, Import vMix
+   Preset…, Recent, Reveal in Explorer, and no Profile or Scene Collection menu.
 2. A show is built, **Save As…** writes a `.bstd`, the app is closed, and
    **Open…** brings back the inputs, order, layers, levels, bus sends and AFV.
 3. **Save** after a change writes without asking for a path, and the title bar
@@ -276,6 +276,9 @@ Spec: `2026-10-16-breadstudio-cleanup-design.md` §2.2 and §4.
    another machine with every file in place.
 6. **Save As…** with **Leave out the stream key** ticked writes a copy whose
    profile carries no stream details (service, server, key).
+7. The owner's own `.vmix` (`F:\Stream\CACAS24\CACAS24.vmix`, the 27-input
+   show) is imported: the inputs, their order, their shots and their audio
+   match what vMix showed, and the report names every difference (V6).
 
 ## Before a run
 
