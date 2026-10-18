@@ -197,7 +197,7 @@ half-built shot.
 | Desktop Capture, Screen | a display or window capture | a named window that has gone is reported |
 | Title, GT Title | the imported title, drawn as it was (S7) | its text, colours, images and static layout are drawn; its animation, its data binding and anything that changes while on air are reported, because they are BreadOverlay's (O2) |
 | Audio input | an audio capture device | matched by name, as a camera is |
-| Video Delay, Virtual Set, PowerPoint, Stream, Video Call, Mix, Photos, Replay | nothing | no desk equivalent; reported |
+| Video Delay, Virtual Set, PowerPoint, DVD, Stream/SRT, Video Call, Mix, Photos, Instant Replay, List | nothing | no desk equivalent; reported. The names are vMix 26's own Add-input menu, read from the shipped `languages\en.txt` |
 | input number | the input's order in the bar | S1 §3: number is position |
 | input title | the input's name | |
 | position, size, crop, rotation | the base's geometry | where vMix has one and the OBS source supports it |
