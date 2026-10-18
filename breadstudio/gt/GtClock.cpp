@@ -1,8 +1,11 @@
 #include "GtClock.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <string>
+#include <vector>
 
 namespace gt {
 
@@ -26,6 +29,23 @@ std::string padded(int value, int digits)
 	char buffer[16];
 	std::snprintf(buffer, sizeof(buffer), "%0*d", digits, value);
 	return buffer;
+}
+
+/* A run of decimal digits, so a span cannot hide a sign or trailing text. */
+bool parseDigits(const std::string &text, long long &out)
+{
+	if (text.empty() || text.size() > 9) {
+		return false;
+	}
+	long long value = 0;
+	for (const char c : text) {
+		if (c < '0' || c > '9') {
+			return false;
+		}
+		value = value * 10 + (c - '0');
+	}
+	out = value;
+	return true;
 }
 
 bool isSpecifier(char c)
@@ -301,6 +321,161 @@ GtClockResult gtExpandClock(const std::string &text, const GtClockTime &now)
 	result.ticking = ticking;
 	result.fractions = fractions;
 	return result;
+}
+
+bool gtTimeSpanMs(const std::string &text, int64_t &ms)
+{
+	/* Split on ':' so "mm:ss" has two parts and "hh:mm:ss[.fff]" three. */
+	std::vector<std::string> parts;
+	std::size_t begin = 0;
+	for (;;) {
+		const std::size_t colon = text.find(':', begin);
+		if (colon == std::string::npos) {
+			parts.push_back(text.substr(begin));
+			break;
+		}
+		parts.push_back(text.substr(begin, colon - begin));
+		begin = colon + 1;
+	}
+	if (parts.size() != 2 && parts.size() != 3) {
+		return false;
+	}
+
+	long long hours = 0, minutes = 0;
+	std::size_t index = 0;
+	if (parts.size() == 3) {
+		if (!parseDigits(parts[0], hours)) {
+			return false;
+		}
+		index = 1;
+	}
+	if (!parseDigits(parts[index], minutes)) {
+		return false;
+	}
+
+	long long seconds = 0, millis = 0;
+	const std::string &last = parts.back();
+	const std::size_t dot = last.find('.');
+	if (dot == std::string::npos) {
+		if (!parseDigits(last, seconds)) {
+			return false;
+		}
+	} else {
+		if (!parseDigits(last.substr(0, dot), seconds)) {
+			return false;
+		}
+		std::string fraction = last.substr(dot + 1);
+		if (fraction.empty() || fraction.size() > 3) {
+			return false;
+		}
+		while (fraction.size() < 3) {
+			fraction.push_back('0');
+		}
+		if (!parseDigits(fraction, millis)) {
+			return false;
+		}
+	}
+
+	ms = ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis;
+	return true;
+}
+
+GtCountdown::GtCountdown(const GtCountdownSettings &settings) : settings_(settings)
+{
+	int64_t value = 0;
+	startMs_ = gtTimeSpanMs(settings_.start, value) ? value : 0;
+	durationMs_ = gtTimeSpanMs(settings_.duration, value) ? value : 0;
+	if (startMs_ < 0) {
+		startMs_ = 0;
+	}
+	if (durationMs_ < 0) {
+		durationMs_ = 0;
+	}
+}
+
+bool GtCountdown::active() const
+{
+	return durationMs_ > 0;
+}
+
+bool GtCountdown::running() const
+{
+	return state_ == State::Running;
+}
+
+int64_t GtCountdown::elapsedAt(int64_t nowMs) const
+{
+	int64_t elapsed = elapsedMs_;
+	if (state_ == State::Running) {
+		elapsed += nowMs - startedAtMs_;
+	}
+	return elapsed < 0 ? 0 : elapsed;
+}
+
+void GtCountdown::start(int64_t nowMs)
+{
+	if (state_ == State::Running) {
+		return;
+	}
+	/* A pause resumes from where it held; a stop or a reset begins a fresh run. */
+	if (state_ == State::Stopped || state_ == State::Idle) {
+		elapsedMs_ = 0;
+	}
+	state_ = State::Running;
+	startedAtMs_ = nowMs;
+}
+
+void GtCountdown::pause(int64_t nowMs)
+{
+	if (state_ == State::Running) {
+		elapsedMs_ = elapsedAt(nowMs);
+	}
+	state_ = State::Paused;
+}
+
+void GtCountdown::stop(int64_t nowMs)
+{
+	if (state_ == State::Running) {
+		elapsedMs_ = elapsedAt(nowMs);
+	}
+	state_ = State::Stopped;
+}
+
+void GtCountdown::reset()
+{
+	elapsedMs_ = 0;
+	startedAtMs_ = 0;
+	state_ = State::Idle;
+}
+
+std::string GtCountdown::text(int64_t nowMs) const
+{
+	const int64_t elapsed = elapsedAt(nowMs);
+	const int64_t low = std::min(startMs_, durationMs_);
+	const int64_t high = std::max(startMs_, durationMs_);
+
+	/* Counting down reads from Duration to Start; Reverse reads from Start to Duration. */
+	int64_t value = settings_.reverse ? startMs_ + elapsed : durationMs_ - elapsed;
+	value = std::clamp(value, low, high);
+	if (settings_.reverseDisplay) {
+		value = low + high - value;
+	}
+
+	/* As a span, vMix formats it as a time of day (§4.5). */
+	GtClockTime span{};
+	const int64_t totalSeconds = value / 1000;
+	span.millis = static_cast<int>(value % 1000);
+	span.second = static_cast<int>(totalSeconds % 60);
+	span.minute = static_cast<int>((totalSeconds / 60) % 60);
+	span.hour = static_cast<int>((totalSeconds / 3600) % 24);
+
+	std::string out;
+	/* ponytail: a one-letter format gtFormatDate refuses falls back to HH:mm:ss, so the
+	 * field always shows a reading; upgrade if vMix is seen to do something else. */
+	if (!gtFormatDate(settings_.format, span, out)) {
+		gtFormatDate("HH:mm:ss", span, out);
+	}
+	return out;
 }
 
 } // namespace gt

@@ -273,12 +273,31 @@ a text it cannot format as written, as vMix does.
 
 While it runs, the field shows the time in `Format` and replaces the text
 value; Start, Pause, Stop and Reset behave as vMix's. A countdown's state is not
-saved: a restarted BreadStudio shows it stopped and reset. *Verify* in vMix
-(§9), before building it: the direction it counts (from Duration down to zero,
-or from Start up to Duration), what `Reverse` and `ReverseDisplay` change, what
-it shows when it ends, what Stop shows against Reset, and which field each
-`<CountdownSettings>` belongs to (the array has no field names; the owner's
-titles have one countdown each).
+saved: a restarted BreadStudio shows it stopped and reset.
+
+**Established from the owner's files (data only, 2026-10-19).** The preset's
+`CountdownXML` is an escaped `ArrayOfCountdownSettings` whose children are
+`<CountdownSettings>` elements carrying the child elements `StartString`,
+`DurationString`, `Format`, `Reverse`, `ReverseDisplay` — elements, not
+attributes, exactly as above. The array holds one entry per editable **text**
+field, in field order; a shaping entry whose `DurationString` is `00:00:00` is
+no countdown. Across 26 inputs that carry a non-empty countdown array in
+`F:\Stream\EAFC24\EAFC24.vmix`, `F:\Stream\CACAS24\CACAS24.vmix` and the FVPL
+presets, the array length equals the text-field count (FVPL's first GT input:
+18 entries against 18 text and 8 picture fields, entries 0 and 1 the title's
+first two text fields); picture fields get no entry. No `.gtzip` `document.xml`
+among the 25 files mentions a countdown, so a countdown lives in the preset and
+the Title Editor, not in the title file.
+
+**Owner-verified — and NOT confirmed in this work.** The on-screen behaviour was
+not watched in vMix (the GUI was not run): what it shows before Start, while
+running, and when it ends; Pause then Start; Stop against Reset; and what
+`Reverse` and `ReverseDisplay` change all remain unconfirmed. The behaviour
+implemented below is this plan's hypothesis and has **not** been checked against
+vMix on the owner's PC: it counts down from `Duration` to zero and holds at
+zero; `Reverse` counts up from `Start` to `Duration`, holding at `Duration`;
+`ReverseDisplay` shows the opposite reading for the direction of counting; and
+`Stop` holds the current reading while `Reset` clears to the start.
 
 A clocked or counting title redraws once a second, or every frame when its
 format shows fractions.

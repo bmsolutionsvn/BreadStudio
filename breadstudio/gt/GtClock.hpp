@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace gt {
@@ -28,5 +29,43 @@ struct GtClockResult {
  * format, and any brace that is not a placeholder or an escape, come back as
  * written (Review Focus 3). */
 GtClockResult gtExpandClock(const std::string &text, const GtClockTime &now);
+
+/* A per-field countdown's settings, as a .vmix preset stores them (§4.5). */
+struct GtCountdownSettings {
+	std::string start = "00:00:00", duration = "00:00:00", format = "mm:ss";
+	bool reverse = false, reverseDisplay = false;
+};
+
+/* Parses "hh:mm:ss", "hh:mm:ss.fff" or "mm:ss" into milliseconds. False when
+ * the text is not a span. */
+bool gtTimeSpanMs(const std::string &text, int64_t &ms);
+
+/* A field's countdown (§4.5). Every method that reads the clock takes nowMs, so
+ * a test and the source both read the same time and nothing hides a clock. */
+class GtCountdown {
+public:
+	explicit GtCountdown(const GtCountdownSettings &settings);
+
+	bool active() const; /* duration > 0; a 00:00:00 countdown is none (§6) */
+	void start(int64_t nowMs);
+	void pause(int64_t nowMs);
+	void stop(int64_t nowMs);
+	void reset();
+	bool running() const;
+
+	/* What the field shows, always; it replaces the text value (§4.5). */
+	std::string text(int64_t nowMs) const;
+
+private:
+	enum class State { Idle, Running, Paused, Stopped };
+	int64_t elapsedAt(int64_t nowMs) const;
+
+	GtCountdownSettings settings_;
+	int64_t startMs_ = 0;
+	int64_t durationMs_ = 0;
+	State state_ = State::Idle;
+	int64_t startedAtMs_ = 0;
+	int64_t elapsedMs_ = 0; /* accumulated while running, frozen while paused or stopped */
+};
 
 } // namespace gt
