@@ -181,18 +181,24 @@ breadstudio: read a vMix preset into a plain list, and report what it cannot bac
 three things above turned out wrong; the code follows the file:
 
 - **Geometry is not on `<Input>` as flat numbers.** vMix keeps an input's
-  placement in the embedded `Positions`/`PositionsExtended` matrix — a relative
-  Pan/Zoom/Rotate, one `MatrixPosition` per output — not as flat
+  placement in the embedded `Positions` matrix — a relative Pan/Zoom/Rotate plus
+  Clipping, one `MatrixPosition` per placement, index 0 (the input's own Main
+  placement) first — not as flat
   `x`/`y`/`width`/`height`/`rotation`/`crop` attributes. It **is** readable:
-  Task 1 carries the matrix raw (`panX/panY`, `zoomX/zoomY`, `rotateX/Y/Z`,
-  `matrixMoved`, and `matrixCount` — how many outputs the preset holds), and
-  **Task 2 converts it** into the base's `obs_transform_info`, given the output
-  resolution and the source's own pixel size, which the reader cannot know. What
-  the desk cannot put on a base — a mirror, a nested `MultiplyPosition`, a
-  border, a rotate origin, and crop — makes an applied matrix an approximation,
-  so Task 2 reports the shot (V4). A preset with more than one output (as all
-  four of the owner's are) has no single matrix for the desk's one Program
-  output, so Task 2 takes Program and reports the rest.
+  the reader carries the Main placement's matrix raw (`panX/panY`, `zoomX/zoomY`,
+  `rotateX/Y/Z`, the crop fractions from `Clipping`, `hidden`, `postZoomX/Y`,
+  `sourceRotation`, `matrixMoved`, and `matrixCount` — how many placements the
+  preset holds for this input), and **Task 2 converts it** into the base's
+  `obs_transform_info`/crop, given the output resolution and the source's own pixel
+  size, which the reader cannot know. Crop the desk *does* hold
+  (`obs_sceneitem_set_crop`) and is ported; what it cannot put on a base — a mirror,
+  a nested `MultiplyPosition`, a border, a rotate origin, and the post-zoom and
+  source rotation vMix applies around them — makes an applied matrix an
+  approximation, so Task 2 reports the shot (V4). **The plan above read `Positions`
+  as an array of outputs; it is not.** Index 0 is the input's own Main placement and
+  the rest are its overlay **layers**: the Position tab reads "Layers / Multi View"
+  and vMix serializes each extra placement as an `<overlay>` element. The desk
+  builds no layers, so Task 2 takes Main (index 0) and reports the overlay layers.
 - **The bar's limit is not on the reader.** `readVmixPreset` carries no bar, so
   the over-limit split (V5) is a second pure function, `limitVmixInputs(result,
   limit)`, which the desk calls with its own limit; the test passes N in.

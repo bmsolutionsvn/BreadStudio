@@ -13,7 +13,9 @@ endif()
 
 target_sources(bread-desk PRIVATE Desk.hpp desk.cpp)
 
-target_link_libraries(bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets ZLIB::ZLIB)
+target_link_libraries(
+  bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets Qt6::Xml ZLIB::ZLIB
+)
 
 # The versions a Project's manifest carries: the fork's own, and the OBS it is built on.
 file(STRINGS "${CMAKE_SOURCE_DIR}/breadstudio/VERSION" BREADSTUDIO_VERSION LIMIT_COUNT 1)
@@ -99,6 +101,9 @@ target_sources(
     StreamWindow.hpp
     TileDisplay.cpp
     TileDisplay.hpp
+    VmixBuild.cpp
+    VmixPreset.cpp
+    VmixPreset.hpp
 )
 
 # The one automated test: no OBS, no Qt.

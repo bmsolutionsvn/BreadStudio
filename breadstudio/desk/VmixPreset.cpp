@@ -3,9 +3,11 @@
 #include <QByteArray>
 #include <QDomDocument>
 #include <QDomElement>
+#include <QDomNodeList>
 #include <QString>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <cstddef>
 
 namespace desk {
@@ -100,6 +102,53 @@ static bool isIdentity(const QDomElement &position)
 	       childNumber(rotate, "X", 0) == 0 && childNumber(rotate, "Y", 0) == 0 && childNumber(rotate, "Z", 0) == 0;
 }
 
+/* vMix's source rotation as degrees: R0/R90/R180/R270. */
+static int sourceRotationDegrees(const QDomElement &position)
+{
+	const QString value = position.firstChildElement(QStringLiteral("SourceRotation")).text();
+	if (value == QStringLiteral("R90")) {
+		return 90;
+	}
+	if (value == QStringLiteral("R180")) {
+		return 180;
+	}
+	if (value == QStringLiteral("R270")) {
+		return 270;
+	}
+	return 0;
+}
+
+/* vMix's Clipping, a float[4], is serialized (no [XmlIgnore]) as four numbers under
+ * <Clipping>: the left, top, right and bottom **boundary positions as a fraction of
+ * the source** (vMix's own default is 0,0,1,1 = whole). The desk crops in source
+ * pixels, so each edge's crop is the boundary minus its own edge: left=a[0],
+ * top=a[1], right=1-a[2], bottom=1-a[3] (read off hj.o() in vMix, which moves the
+ * quad's four corners by those fractions). Absent means no crop. */
+static void readClipping(const QDomElement &position, VmixInput &input)
+{
+	const QDomElement clipping = position.firstChildElement(QStringLiteral("Clipping"));
+	if (clipping.isNull()) {
+		return;
+	}
+	double edge[4] = {0, 0, 1, 1};
+	int seen = 0;
+	for (QDomElement value = clipping.firstChildElement(); !value.isNull() && seen < 4;
+	     value = value.nextSiblingElement()) {
+		bool ok = false;
+		const double number = value.text().toDouble(&ok);
+		if (ok) {
+			edge[seen++] = number;
+		}
+	}
+	if (seen < 4) {
+		return; /* a shape the spec cannot read: leave the crop alone rather than guess */
+	}
+	input.cropLeft = edge[0];
+	input.cropTop = edge[1];
+	input.cropRight = 1.0 - edge[2];
+	input.cropBottom = 1.0 - edge[3];
+}
+
 /* One MatrixPosition's transform, copied raw. */
 static void takeMatrix(const QDomElement &position, VmixInput &input)
 {
@@ -111,14 +160,21 @@ static void takeMatrix(const QDomElement &position, VmixInput &input)
 	input.rotateX = childNumber(rotate, "X", 0);
 	input.rotateY = childNumber(rotate, "Y", 0);
 	input.rotateZ = childNumber(rotate, "Z", 0);
+	input.postZoomX = childNumber(position, "PostZoomX", 1);
+	input.postZoomY = childNumber(position, "PostZoomY", 1);
+	input.sourceRotation = sourceRotationDegrees(position);
+	input.hidden = position.firstChildElement(QStringLiteral("Hidden")).text() == QStringLiteral("true");
+	readClipping(position, input);
 }
 
 /* vMix keeps an input's placement in the `Positions` attribute as a whole embedded
- * XML document — one MatrixPosition per output. Read it into the input raw: the
- * desk converts it in Task 2, where the source's own pixel size is known. A preset
- * with more than one output leaves matrixCount above one, so Task 2 knows no single
- * matrix is the desk's geometry. The matrix carried is the first output that
- * actually places the input, or the identity when none does. */
+ * XML document — one MatrixPosition per placement, **index 0 first**. Index 0 is
+ * the input's own Main/Program placement; the rest are its overlay **layers** (the
+ * Position tab reads "Layers / Multi View", and vMix serializes them as `<overlay>`
+ * elements). The desk builds no layers, so it takes index 0, Program's, and reports
+ * the rest: that is what the desk's Program shows. A preset with more than one
+ * placement leaves matrixCount above one. `matrixMoved` is false when the Main
+ * matrix is the identity — a full-frame input, not a placed one. */
 static void readMatrix(const QDomElement &element, VmixInput &input)
 {
 	QDomDocument positions;
@@ -127,24 +183,18 @@ static void readMatrix(const QDomElement &element, VmixInput &input)
 	}
 
 	QDomElement first;
-	QDomElement placed;
 	for (QDomElement position = positions.documentElement().firstChildElement(QStringLiteral("MatrixPosition"));
 	     !position.isNull(); position = position.nextSiblingElement(QStringLiteral("MatrixPosition"))) {
 		input.matrixCount++;
 		if (first.isNull()) {
 			first = position;
 		}
-		if (placed.isNull() && !isIdentity(position)) {
-			placed = position;
-		}
 	}
 
 	input.hasGeometry = input.matrixCount > 0;
-	if (!placed.isNull()) {
-		takeMatrix(placed, input);
-		input.matrixMoved = true;
-	} else if (!first.isNull()) {
+	if (!first.isNull()) {
 		takeMatrix(first, input);
+		input.matrixMoved = !isIdentity(first);
 	}
 }
 
@@ -251,6 +301,45 @@ bool readVmixPreset(const std::string &xml, VmixPresetResult &result, std::strin
 		result.preview = state.attribute(QStringLiteral("Preview")).toInt();
 	}
 
+	/* The output frame the matrices are relative to, so Task 2 can turn a matrix
+	 * into a shot. A preset that names none leaves both at 0 (a shot it cannot
+	 * compute is reported, not guessed). */
+	const QDomElement format = root.firstChildElement(QStringLiteral("OutputFormat"));
+	if (!format.isNull()) {
+		const QString size = format.attribute(QStringLiteral("OutputSize"));
+		const int x = size.indexOf(QLatin1Char('x'));
+		bool wide = false;
+		bool tall = false;
+		if (x > 0) {
+			result.outputWidth = size.left(x).toInt(&wide);
+			result.outputHeight = size.mid(x + 1).toInt(&tall);
+		}
+		if (!wide) {
+			result.outputWidth = 0;
+		}
+		if (!tall) {
+			result.outputHeight = 0;
+		}
+	}
+
+	/* The overlays 1-4 and the transitions the desk cannot carry (§5.2). Presence
+	 * only: vMix writes an <OverlayN> slot value (nonzero when the slot is used) per
+	 * output, and names its transition files under a Transitions directory. The
+	 * routing itself is not read, so the report names the section, not which input
+	 * sat on it — the shape is private (V7), and a guess would be a wrong shot. */
+	for (int slot = 1; slot <= 4 && !result.overlays; slot++) {
+		const QDomNodeList nodes = document.elementsByTagName(QStringLiteral("Overlay%1").arg(slot));
+		for (int i = 0; i < nodes.count(); i++) {
+			bool used = false;
+			if (nodes.at(i).toElement().text().toInt(&used) != 0 && used) {
+				result.overlays = true;
+				break;
+			}
+		}
+	}
+	result.transitions = xml.find("Transitions\\") != std::string::npos ||
+			     xml.find("Transitions/") != std::string::npos;
+
 	return true;
 }
 
@@ -271,6 +360,112 @@ void limitVmixInputs(VmixPresetResult &result, int limit)
 	}
 
 	result.inputs.resize(keep);
+}
+
+/* The building half's pure part (V4/V5). A kind the desk can back gets its OBS
+ * type; a kind with no desk input — a Skipped entry (Task 1 already reported it),
+ * or an Unknown one (Task 1 carries none) — returns null and makes no input. None
+ * of the owner's presets holds a Browser or a Desktop Capture, so those two have
+ * no evidenced Type number and fall to Unknown at read; they are mapped here
+ * anyway, for the day a preset carries one. */
+const char *vmixBaseId(VmixKind kind)
+{
+	switch (kind) {
+	case VmixKind::Colour:
+		return "color_source";
+	case VmixKind::Image:
+		return "image_source";
+	case VmixKind::Video:
+	case VmixKind::AudioFile:
+	case VmixKind::Media:
+		return "ffmpeg_source";
+	case VmixKind::Capture:
+		return "dshow_input";
+	case VmixKind::AudioIn:
+		return "wasapi_input_capture";
+	case VmixKind::NDI:
+		return "ndi_source";
+	case VmixKind::Browser:
+		return "browser_source";
+	case VmixKind::DesktopCapture:
+		return "monitor_capture";
+	case VmixKind::Title:
+		/* §10: a vMix title imports as a plain text source, the rest reported. */
+		return "text_ft2_source";
+	case VmixKind::Unknown:
+	case VmixKind::Skipped:
+		return nullptr;
+	}
+	return nullptr;
+}
+
+std::vector<VmixBuildStep> planVmixBuild(VmixPresetResult &result, int limit)
+{
+	/* The bar's own rule first (V5), so the over-limit rows precede the build's
+	 * and the steps are exactly what is left to make. */
+	limitVmixInputs(result, limit);
+
+	std::vector<VmixBuildStep> steps;
+	steps.reserve(result.inputs.size());
+	for (const VmixInput &input : result.inputs) {
+		const char *baseId = vmixBaseId(input.kind);
+		if (!baseId) {
+			continue; /* no desk base: no input, and the read's row still stands */
+		}
+		steps.push_back({&input, baseId});
+	}
+
+	/* The preset-wide rows for the two sections the desk has no home for (§5.2):
+	 * reported, not applied. Only when the preset holds them, so a clean import
+	 * still says the whole preset came across (§5.3). Added once: planVmixBuild is
+	 * pure and may be called twice, and the rows must not double. */
+	auto hasRow = [&result](const char *had) {
+		for (const VmixReportRow &row : result.report) {
+			if (row.input.empty() && row.had == had) {
+				return true;
+			}
+		}
+		return false;
+	};
+	if (!result.inputs.empty() && result.overlays && !hasRow("vMix overlays 1-4")) {
+		result.report.push_back(
+			{"", "vMix overlays 1-4",
+			 "not applied: the desk has no overlay bus; the inputs are imported, the routing is not carried"});
+	}
+	if (!result.inputs.empty() && result.transitions && !hasRow("vMix transitions")) {
+		result.report.push_back({"", "vMix transitions", "not applied: the desk uses OBS's transitions"});
+	}
+
+	return steps;
+}
+
+bool vmixPlacement(const VmixInput &input, double frameW, double frameH, double srcW, double srcH, VmixPlacement &out)
+{
+	if (frameW <= 0 || frameH <= 0 || srcW <= 0 || srcH <= 0) {
+		return false;
+	}
+
+	/* vMix fits the whole source into the frame at Zoom 1, then scales by Zoom: the
+	 * fit is whichever of the two axes is tighter, so nothing is cropped. A stored
+	 * Zoom of 0 is vMix's "unset", which it coerces to 1; match that, or the source
+	 * would vanish. */
+	const double zoomX = input.zoomX == 0 ? 1.0 : input.zoomX;
+	const double zoomY = input.zoomY == 0 ? 1.0 : input.zoomY;
+	const double fit = std::min(frameW / srcW, frameH / srcH);
+	const double onFrameW = srcW * fit * zoomX;
+	const double onFrameH = srcH * fit * zoomY;
+
+	VmixPlacement placed;
+	placed.scaleX = fit * zoomX;
+	placed.scaleY = fit * zoomY;
+	/* centred at zoom, then panned: vMix's Pan is a fraction of the frame (X of its
+	 * width, Y of its height) and, like the desk, reads Y downwards. */
+	placed.x = (frameW - onFrameW) / 2.0 + input.panX * frameW;
+	placed.y = (frameH - onFrameH) / 2.0 + input.panY * frameH;
+	placed.rot = input.rotateZ;
+
+	out = placed;
+	return true;
 }
 
 } // namespace desk

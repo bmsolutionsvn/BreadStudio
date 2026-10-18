@@ -1,7 +1,9 @@
 #include "VmixPreset.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 using namespace desk;
 
@@ -22,6 +24,12 @@ static void check(bool ok, int line, const char *what)
 }
 
 #define CHECK(cond) check((cond), __LINE__, #cond)
+
+/* a shot's numbers are computed from doubles, so an exact compare would be brittle */
+static bool near(double a, double b)
+{
+	return std::fabs(a - b) < 1e-9;
+}
 
 static std::string readFile(const std::string &path)
 {
@@ -91,18 +99,24 @@ int main(int argc, char **argv)
 			CHECK(colour.kind == VmixKind::Colour);
 			CHECK(colour.title == "Main");
 			CHECK(colour.colour == "0");
-			/* a real picture-in-picture: output 1 full frame, output 2 placing it
-			 * small and low-left. The reader carries that placement raw, for Task 2
-			 * to convert once the source's pixel size is known; matrixCount says the
-			 * preset holds more than one output, so no single matrix is the desk's. */
+			/* a real picture-in-picture, but on overlay layer 1: the list is index 0
+			 * (the input's own Main/Program placement) followed by one MatrixPosition
+			 * per overlay layer, so the matrix carried is Main's — the identity — and
+			 * the preset holds two placements. The PiP is reported, not taken (the
+			 * desk builds no layers). */
 			CHECK(colour.hasGeometry);
 			CHECK(colour.matrixCount == 2);
-			CHECK(colour.matrixMoved);
-			CHECK(colour.zoomX == 0.83525);
-			CHECK(colour.zoomY == 0.83525);
-			CHECK(colour.panX == 0.214);
-			CHECK(colour.panY == 0.189);
+			CHECK(!colour.matrixMoved);
+			CHECK(colour.zoomX == 1.0);
+			CHECK(colour.zoomY == 1.0);
+			CHECK(colour.panX == 0.0);
+			CHECK(colour.panY == 0.0);
 			CHECK(colour.rotateX == 0.0 && colour.rotateY == 0.0 && colour.rotateZ == 0.0);
+			/* vMix's serialized fields the desk reports, at their defaults here */
+			CHECK(colour.postZoomX == 1.0 && colour.postZoomY == 1.0);
+			CHECK(colour.sourceRotation == 0);
+			CHECK(!colour.hidden);
+			CHECK(colour.cropLeft == 0.0 && colour.cropRight == 0.0);
 
 			const VmixInput &title = result.inputs[3];
 			CHECK(title.number == 4);
@@ -277,6 +291,208 @@ int main(int argc, char **argv)
 			CHECK(result.report[2].why == "the desk's bar holds 4");
 			CHECK(result.report[3].input == "Transitions");
 			CHECK(result.report[3].had == "input 6");
+		}
+	}
+
+	/* Which kind needs which OBS base, and which kind makes no input at all
+	 * (§5.2/§5.4): the pure decision the build half turns into a source. */
+	{
+		CHECK(std::string(vmixBaseId(VmixKind::Colour)) == "color_source");
+		CHECK(std::string(vmixBaseId(VmixKind::Image)) == "image_source");
+		CHECK(std::string(vmixBaseId(VmixKind::Video)) == "ffmpeg_source");
+		CHECK(std::string(vmixBaseId(VmixKind::AudioFile)) == "ffmpeg_source");
+		CHECK(std::string(vmixBaseId(VmixKind::Media)) == "ffmpeg_source");
+		CHECK(std::string(vmixBaseId(VmixKind::Capture)) == "dshow_input");
+		CHECK(std::string(vmixBaseId(VmixKind::AudioIn)) == "wasapi_input_capture");
+		CHECK(std::string(vmixBaseId(VmixKind::NDI)) == "ndi_source");
+		CHECK(std::string(vmixBaseId(VmixKind::Browser)) == "browser_source");
+		CHECK(std::string(vmixBaseId(VmixKind::DesktopCapture)) == "monitor_capture");
+		CHECK(std::string(vmixBaseId(VmixKind::Title)) == "text_ft2_source");
+		/* the two that make no input: a kind with no desk equivalent, and one the
+		 * spec cannot name (which the read does not even carry) */
+		CHECK(vmixBaseId(VmixKind::Skipped) == nullptr);
+		CHECK(vmixBaseId(VmixKind::Unknown) == nullptr);
+	}
+
+	/* The pure build plan over a real cut-down preset: the inputs to make, in
+	 * number order, with the two kinds that have no equivalent left out but their
+	 * rows kept (V4/V5). */
+	{
+		const std::string bytes = fixture(dir, "cut-cacas24.vmix");
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset(bytes, result, error));
+		CHECK(result.report.size() == 2); /* the List and the Image Sequence */
+
+		const std::vector<VmixBuildStep> steps = planVmixBuild(result, 0);
+		CHECK(steps.size() == 4); /* the image, colour, title and video; not the two skipped */
+		if (steps.size() == 4) {
+			CHECK(steps[0].input->kind == VmixKind::Image);
+			CHECK(steps[1].input->kind == VmixKind::Colour);
+			CHECK(steps[2].input->kind == VmixKind::Title);
+			CHECK(steps[3].input->kind == VmixKind::Video);
+			CHECK(std::string(steps[0].baseId) == "image_source");
+			CHECK(std::string(steps[1].baseId) == "color_source");
+			CHECK(std::string(steps[2].baseId) == "text_ft2_source");
+			CHECK(std::string(steps[3].baseId) == "ffmpeg_source");
+		}
+		/* no desk base for the two skipped kinds, so no step named one */
+		for (const VmixBuildStep &step : steps) {
+			CHECK(step.input->kind != VmixKind::Skipped);
+			CHECK(step.input->kind != VmixKind::Unknown);
+		}
+		/* the read's rows are untouched; this preset has no overlays or transitions */
+		CHECK(result.report.size() == 2);
+	}
+
+	/* The over-limit split driven end to end through the build's pure part (V5):
+	 * the bar holds two, the rest are reported, and the steps are what is left. */
+	{
+		const std::string bytes = fixture(dir, "written-many.vmix");
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset(bytes, result, error));
+		CHECK(result.report.empty());
+
+		const std::vector<VmixBuildStep> steps = planVmixBuild(result, 2);
+		CHECK(steps.size() == 2);
+		CHECK(result.inputs.size() == 2);
+		CHECK(result.report.size() == 2);
+		if (steps.size() == 2) {
+			CHECK(steps[0].input->title == "One");
+			CHECK(steps[1].input->title == "Two");
+		}
+		if (result.report.size() == 2) {
+			CHECK(result.report[0].input == "Three");
+			CHECK(result.report[0].why == "the desk's bar holds 2");
+			CHECK(result.report[1].input == "Four");
+		}
+	}
+
+	/* The matrix turned into a shot (V4). The source is **square** against a 16:9
+	 * frame, so contain (fit the whole source, 1.08) and cover (fill and crop, 1.92)
+	 * give different numbers: the case can fail. */
+	{
+		VmixInput shot;
+		shot.kind = VmixKind::Video;
+		shot.zoomX = shot.zoomY = 1;
+		shot.panX = shot.panY = 0;
+
+		VmixPlacement place;
+		CHECK(vmixPlacement(shot, 1920, 1080, 1000, 1000, place));
+		/* fit = min(1920/1000, 1080/1000) = 1.08, centred at 1080x1080 */
+		CHECK(near(place.scaleX, 1.08));
+		CHECK(near(place.scaleY, 1.08));
+		CHECK(near(place.x, (1920 - 1080) / 2.0)); /* 420 */
+		CHECK(near(place.y, 0.0));
+		CHECK(place.rot == 0.0);
+
+		/* zoom 0.5: half of the fitted size, still centred */
+		shot.zoomX = shot.zoomY = 0.5;
+		CHECK(vmixPlacement(shot, 1920, 1080, 1000, 1000, place));
+		CHECK(near(place.scaleX, 0.54));
+		CHECK(near(place.x, (1920 - 540) / 2.0)); /* 690 */
+		CHECK(near(place.y, (1080 - 540) / 2.0)); /* 270 */
+
+		/* a stored Zoom of 0 is vMix's unset: read as 1, or the source would vanish */
+		shot.zoomX = shot.zoomY = 0;
+		CHECK(vmixPlacement(shot, 1920, 1080, 1000, 1000, place));
+		CHECK(near(place.scaleX, 1.08));
+
+		/* pan is a fraction of the frame, on top of the centred shot */
+		shot.zoomX = shot.zoomY = 1;
+		shot.panX = 0.25;
+		shot.panY = -0.25;
+		CHECK(vmixPlacement(shot, 1920, 1080, 1000, 1000, place));
+		CHECK(near(place.x, (1920 - 1080) / 2.0 + 0.25 * 1920));
+		CHECK(near(place.y, 0.0 - 0.25 * 1080));
+
+		/* rotation is carried through as degrees */
+		shot.panX = shot.panY = 0;
+		shot.rotateZ = 30;
+		CHECK(vmixPlacement(shot, 1920, 1080, 1000, 1000, place));
+		CHECK(place.rot == 30.0);
+
+		/* a shot that cannot be computed is refused, not guessed: no frame, or a
+		 * source with no pixel size yet */
+		CHECK(!vmixPlacement(shot, 0, 0, 1000, 1000, place));
+		CHECK(!vmixPlacement(shot, 1920, 1080, 0, 0, place));
+	}
+
+	/* The output frame, the overlays and the transitions the reader carries: a
+	 * preset that names none leaves them at rest, one that names them sets them. */
+	{
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset("<XML><Version>9</Version>"
+				     "<OutputFormat OutputSize=\"1920x1080\" />"
+				     "<Input Type=\"12\" Title=\"C\" OriginalTitle=\"Colour\" Colour=\"0\" />"
+				     "<Overlay1>1</Overlay1></XML>",
+				     result, error));
+		CHECK(result.outputWidth == 1920);
+		CHECK(result.outputHeight == 1080);
+		CHECK(result.overlays);
+		CHECK(!result.transitions);
+
+		/* a preset that names no frame: nothing to compute a shot against */
+		VmixPresetResult bare;
+		CHECK(readVmixPreset("<XML><Version>9</Version></XML>", bare, error));
+		CHECK(bare.outputWidth == 0 && bare.outputHeight == 0);
+		CHECK(!bare.overlays && !bare.transitions);
+
+		/* a transition lies under a Transitions directory, vMix's own shape */
+		VmixPresetResult trans;
+		CHECK(readVmixPreset("<XML><Version>9</Version>"
+				     "<Input Type=\"0\" Title=\"T\" OriginalTitle=\"a.mp4\" />"
+				     "<AdditionalFiles>C:\\Show\\Transitions\\Trans00001.png</AdditionalFiles></XML>",
+				     trans, error));
+		CHECK(trans.transitions);
+
+		/* the cut-down real preset names neither, so a clean import stays clean */
+		const std::string bytes = fixture(dir, "cut-cacas24.vmix");
+		VmixPresetResult real;
+		CHECK(readVmixPreset(bytes, real, error));
+		CHECK(!real.overlays && !real.transitions);
+	}
+
+	/* Program's matrix carries more than pan and zoom (V4): the crop Clipping
+	 * names, the hidden flag, post-zoom and the source rotation are all serialized
+	 * (no [XmlIgnore]) and read, so the build half applies crop and hidden and
+	 * reports the two it cannot place. */
+	{
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset(
+			"<XML><Version>9</Version>"
+			"<Input Type=\"5\" Title=\"Cam\" OriginalTitle=\"Camera 1\" Positions=\""
+			"&lt;ArrayOfMatrixPosition&gt;&lt;MatrixPosition&gt;"
+			"&lt;Hidden&gt;true&lt;/Hidden&gt;"
+			"&lt;ZoomX&gt;0.5&lt;/ZoomX&gt;&lt;ZoomY&gt;0.5&lt;/ZoomY&gt;"
+			"&lt;PanX&gt;0.1&lt;/PanX&gt;&lt;PanY&gt;0.2&lt;/PanY&gt;"
+			"&lt;PostZoomX&gt;2&lt;/PostZoomX&gt;&lt;PostZoomY&gt;2&lt;/PostZoomY&gt;"
+			"&lt;SourceRotation&gt;R90&lt;/SourceRotation&gt;"
+			"&lt;Rotate&gt;&lt;X&gt;0&lt;/X&gt;&lt;Y&gt;0&lt;/Y&gt;&lt;Z&gt;0&lt;/Z&gt;&lt;/Rotate&gt;"
+			"&lt;Clipping&gt;&lt;float&gt;0.1&lt;/float&gt;&lt;float&gt;0.2&lt;/float&gt;"
+			"&lt;float&gt;0.9&lt;/float&gt;&lt;float&gt;0.8&lt;/float&gt;&lt;/Clipping&gt;"
+			"&lt;/MatrixPosition&gt;&lt;/ArrayOfMatrixPosition&gt;\" /></XML>",
+			result, error));
+		CHECK(result.inputs.size() == 1);
+		if (result.inputs.size() == 1) {
+			const VmixInput &cam = result.inputs[0];
+			CHECK(cam.kind == VmixKind::Capture);
+			CHECK(cam.matrixCount == 1);
+			CHECK(cam.matrixMoved);
+			CHECK(near(cam.zoomX, 0.5));
+			CHECK(near(cam.panX, 0.1));
+			CHECK(near(cam.postZoomX, 2.0));
+			CHECK(near(cam.postZoomY, 2.0));
+			CHECK(cam.sourceRotation == 90);
+			CHECK(cam.hidden);
+			/* Clipping is boundary positions, so crop is what is cut off each edge */
+			CHECK(near(cam.cropLeft, 0.1));
+			CHECK(near(cam.cropTop, 0.2));
+			CHECK(near(cam.cropRight, 1.0 - 0.9));
+			CHECK(near(cam.cropBottom, 1.0 - 0.8));
 		}
 	}
 
