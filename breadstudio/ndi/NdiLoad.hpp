@@ -34,9 +34,9 @@
 #include <string>
 #include <vector>
 
-/* NDI's DLL from the folder that holds the program first, where BreadStudio ships it, then from NDI's
- * runtime folder (network inputs spec §7.2). Null when neither has a usable one. `module` is the handle
- * to free at the end; `from` the file that was loaded. */
+/* NDI's DLL from the folder that holds the program first (a developer may drop one there; releases
+ * never ship it), then from NDI's runtime folder (network inputs spec §7.2). Null when neither has a
+ * usable one. `module` is the handle to free at the end; `from` the file that was loaded. */
 inline const NDIlib_v6 *loadNdi(HMODULE &module, std::wstring &from)
 {
 	std::vector<std::wstring> folders;

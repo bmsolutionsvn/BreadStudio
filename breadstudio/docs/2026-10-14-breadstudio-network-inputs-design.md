@@ -344,23 +344,27 @@ Its loader is rewritten on Win32 calls, so the plugin needs no Qt.
 
 ### 7.2 The DLL
 
-By N6, `Processing.NDI.Lib.x64.dll` ships in BreadStudio's folder, beside
-`obs64.exe`. Not beside the plugin: OBS loads every DLL in `obs-plugins` as a
-plugin.
+*Amended 2026-10-18 (owner): the DLL is no longer shipped; see §7.3.*
 
-- It is copied from the NDI SDK on the build machine at build time. It is
-  never committed to git.
-- The build machine, and later CI, therefore needs the NDI SDK installed, as
-  BreadCamera's build already expects. Without it the configure prints a
-  warning, the NDI plugin is still built (NDI's headers are MIT-licensed and
-  are in the tree), and the DLL is absent, which §10 covers. The script that
-  makes the installer, when S0 writes it, refuses a build that has no DLL.
-- The plugin loads the DLL at run time, looking in its own folder first and
-  then in NDI's install location. So the DLL can be taken out of the package
-  later without a code change.
-- The package carries NDI's licence text. The NDI tab carries NDI's
-  trademark line and a link to ndi.video, as NDI's licence asks near where NDI
-  is chosen. OBS's About box is OBS's file and is not edited.
+`Processing.NDI.Lib.x64.dll` is **never** in BreadStudio's folder or package.
+It comes from the **NDI Runtime**, which BreadStudio's installer installs by
+running **NDI's own runtime installer** (NDI's redistributable, shipped beside
+BreadStudio's setup as a separate program).
+
+- The build does not copy the DLL and needs no NDI SDK: NDI's headers are
+  MIT-licensed and in the tree. A build machine that wants to use NDI installs
+  the NDI 6 Runtime, as a user does.
+- The plugin loads the DLL at run time, looking in the program's folder first
+  (a developer may drop one there; a release never has one) and then in the
+  NDI Runtime's folder (`NDI_RUNTIME_DIR_V6`).
+- The installer script, when S0 writes it, **refuses a package that contains
+  `Processing.NDI.Lib.x64.dll`**, and bundles NDI's runtime installer, running
+  it during setup. Its redistribution terms are checked when S0 writes it.
+- Without the runtime, the NDI tab says: "NDI is off: the NDI Runtime is not
+  installed. Install it from ndi.link/NDIRedistV6, then restart BreadStudio."
+- The NDI tab carries NDI's trademark line and a link to ndi.video, as NDI's
+  licence asks near where NDI is chosen. OBS's About box is OBS's file and is
+  not edited.
 
 ### 7.3 The licence risk, as put to the owner
 
@@ -373,10 +377,16 @@ optionally by the program's installer.
 
 So shipping the DLL in the folder conflicts with the GPL as the author reads
 it, and the exposure is a complaint from the OBS project or from NDI. The
-author is not a lawyer. The owner chose this route knowing that. The two
-alternatives offered were BreadStudio's installer running NDI's own runtime
-installer silently, and a one-click download at first use; §7.2's run-time
-loading keeps both open.
+author is not a lawyer. The owner first chose to ship the DLL knowing that.
+The two alternatives offered were BreadStudio's installer running NDI's own
+runtime installer, and a one-click download at first use.
+
+**2026-10-18: the owner switched to the first alternative.** BreadStudio's
+licence cannot change: it is a fork of OBS (GPL-2.0-or-later), and only OBS's
+copyright holders could relicense it. Running NDI's own runtime installer
+ships NDI as a separate program beside BreadStudio, which the GPL allows
+("mere aggregation"), and is the route NDI states for open-source programs.
+The user still gets a one-click setup.
 
 ## 8. Tally
 
@@ -422,7 +432,7 @@ open in the new window from "Base properties…".
 | A sender returns under its name in another format | The input follows it. |
 | Two senders have the same source name | They are two tiles, under two PC names. An input stays bound to the PC and name it was made from. |
 | SRT: the listener port is in use, or the passphrase is wrong | The tile stays black and the status box shows the input trying again. The reason is in OBS's log. |
-| NDI's DLL is missing or does not load | The NDI tab shows one line saying so. NDI inputs already in the collection are black tiles. Nothing crashes; every other kind works. |
+| NDI's DLL is missing or does not load | The NDI tab shows one line saying so, with where to get the NDI Runtime (§7.2). NDI inputs already in the collection are black tiles. Nothing crashes; every other kind works. |
 | No GPU decoder for OMT-HX | Software decoding, and the page says so. |
 | An OMT source's format is unknown | `no signal` on the tile (§4.2). It can be added, and stays black. |
 | Announcements do not arrive | Add by address for OMT, Also search for NDI (§4.1). |
@@ -485,7 +495,7 @@ the OMT tab, and the format check is added.
 
 | Roadmap | Was | Becomes |
 |---|---|---|
-| R12, NDI | "NDI is BreadCamera's door for outside programs; its runtime is closed and installed by the user." | BreadStudio receives NDI too, and ships NDI's DLL (N6). |
+| R12, NDI | "NDI is BreadCamera's door for outside programs; its runtime is closed and installed by the user." | BreadStudio receives NDI too; its installer runs NDI's own runtime installer (§7.2, amended 2026-10-18). |
 | R12, OMT | "Nothing but the BreadCamera output and the BreadStudio input may depend on OMT." | Unchanged by part 1: this is still the BreadStudio input. Part 2's OMT output will change it. |
 | §4 row 3, S2 | Includes "BreadCamera outputs as inputs over OMT, with tally sent back". | That item is delivered here. The rest of S2 (Kinde, BreadCall, BreadStream) is untouched. |
 | §4 row 5, S3 | "Several independent outputs over SDI, NDI and SRT; ISO recording." | Brought forward as parts 2 and 3, with OMT added. |
@@ -501,5 +511,5 @@ decides.
 | DistroAV's code assumes its own configuration and menus. | Plan C's first task reads the release it takes from and lists what each kept file needs. |
 | The desk's input bar was reworked on 2026-10-14 (`f78a6d607`), after its checks were run. | Plan A reads the bar as it is then, and its hand-checks cover the Add path again. |
 | The format check opens connections the operator did not ask for. | Preview stream for plain OMT; a fraction of a second; only while the window is open (§4.2, §6.1). |
-| The build then needs two things outside the repo: the OMT-HX checkout and the NDI SDK. | Without the OMT-HX checkout the configure stops and names it. Without the NDI SDK it warns, and the installer script refuses to package (§7.2). S0's CI task must fetch both. |
+| The build then needs one thing outside the repo: the OMT-HX checkout. (The NDI SDK is no longer needed; amended 2026-10-18.) | Without the OMT-HX checkout the configure stops and names it. S0's CI task must fetch it; S0's installer task bundles NDI's runtime installer (§7.2). |
 | OBS's Media Source adds delay on SRT that a dedicated receiver would not. | Measured in Plan A's hand-check against vMix on the same stream; §5.3's upgrade if it matters. |
