@@ -17,8 +17,10 @@ public:
 	/* true while it has changes not written (P9) */
 	bool changed() const;
 
-	/* a fresh, empty Project (P3) */
-	void createNew();
+	/* a fresh, empty Project (P3). False, with `error` set, when OBS would not
+	 * create the profile or the scene collection it needs: the live pair is left
+	 * untouched, so a caller that would build into the Project must not. */
+	bool createNew(std::string &error);
 	/* reads `path` and switches the profile and the scene collection to what it holds */
 	bool open(const std::string &path, std::string &error);
 	/* writes to the open path, or asks for one when there is none */

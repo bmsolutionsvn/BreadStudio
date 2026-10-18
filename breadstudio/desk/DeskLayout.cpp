@@ -387,11 +387,29 @@ static void importVmixPreset(QWidget *parent)
 		return;
 	}
 
-	/* a fresh Project (V3), the preset built into it through the desk's own InputModel.
-	 * The desk's bar scrolls and holds every input (S1 §3), so it has no limit to pass:
-	 * 0 means no bar, and V5's over-limit split has nothing to trim here. */
-	open->createNew();
+	/* a fresh Project (V3) first. If OBS refuses to make the profile or the scene
+	 * collection, the preset must not be built: building would append its inputs to
+	 * the operator's open show and a later Save would overwrite their file with it. So
+	 * a fresh Project that could not be made refuses the import and is surfaced through
+	 * the reader's own message path, exactly as a read that failed is (§8: the open
+	 * Project is left untouched and nothing is created). */
+	if (!open->createNew(error)) {
+		QMessageBox::warning(parent, text("Project.ImportVmix"), QString::fromStdString(error));
+		return;
+	}
+
+	/* the preset built into it through the desk's own InputModel. The desk's bar scrolls
+	 * and holds every input (S1 §3), so it has no limit to pass: 0 means no bar, and V5's
+	 * over-limit split has nothing to trim here. */
 	buildVmixPreset(result, 0);
+
+	/* §5.2's stream, output and recording settings are carried by nobody: the reader
+	 * reads none, the builder applies none, and vMix's own settings (its stream
+	 * destinations, its recording path, its external outputs) have no honest OBS
+	 * equivalent to map, so the new Project keeps OBS's defaults. Reported rather than
+	 * left silent (V4), so the operator is told instead of finding out on air. */
+	result.report.push_back({"", "vMix stream, output and recording settings",
+				 "not imported: no OBS equivalent is mapped; the new Project keeps OBS's defaults"});
 
 	/* the report is raised once, whatever the build produced: an empty report still says
 	 * the whole preset came across (§5.3). It must delete itself on close, as the desk's
@@ -410,10 +428,17 @@ static QMenu *buildProjectMenu(QWidget *parent)
 
 	QAction *newAction = menu->addAction(text("Project.New"));
 	QObject::connect(newAction, &QAction::triggered, [parent] {
-		if (project() && confirmDiscard(parent)) {
-			project()->createNew();
-			applyProjectTitle();
+		if (!project() || !confirmDiscard(parent)) {
+			return;
 		}
+		std::string error;
+		if (!project()->createNew(error)) {
+			/* New cannot make the fresh Project; the open show is untouched, so the
+			 * only thing left is to say why (spec §8) */
+			QMessageBox::warning(parent, text("Project.New"), QString::fromStdString(error));
+			return;
+		}
+		applyProjectTitle();
 	});
 
 	QAction *openAction = menu->addAction(text("Project.Open"));

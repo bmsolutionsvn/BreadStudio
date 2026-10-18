@@ -358,7 +358,7 @@ void Project::flushToObs()
 	obs_frontend_save();
 }
 
-void Project::createNew()
+bool Project::createNew(std::string &error)
 {
 	/* the outgoing pair is written as OBS switches off it (ActivateProfile saves the
 	 * active profile at OBSBasic_Profiles.cpp:690, ActivateSceneCollection saves the
@@ -370,19 +370,24 @@ void Project::createNew()
 
 	obs_frontend_create_profile(profileName.c_str());
 	if (currentProfileName() != profileName) {
-		/* nothing was created; the live profile is untouched */
-		return;
+		/* nothing was created; the live profile is untouched. Reported, not silent:
+		 * a caller that would build into this Project would otherwise write into the
+		 * operator's open show (spec §8) */
+		error = "could not create the profile '" + profileName + "'";
+		return false;
 	}
 	if (!obs_frontend_add_scene_collection(collectionName.c_str()) || currentCollectionName() != collectionName) {
 		/* the profile did change; put the live pair back before giving up */
 		if (!previousProfile.empty()) {
 			obs_frontend_set_current_profile(previousProfile.c_str());
 		}
-		return;
+		error = "could not create the scene collection '" + collectionName + "'";
+		return false;
 	}
 
 	path_.clear();
 	changed_ = false;
+	return true;
 }
 
 bool Project::open(const std::string &path, std::string &error)
