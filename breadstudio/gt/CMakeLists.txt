@@ -42,3 +42,19 @@ set_target_properties(
   bread-gt-document-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
 )
+
+# The field rule: the document parser and the package reader together. Qt for the parser, zlib for the
+# package; the local count case reads the owner's F:/Stream when it is there.
+add_executable(bread-gt-fields-test test/GtFieldsTest.cpp GtFields.cpp GtPackage.cpp GtDocument.cpp)
+target_include_directories(bread-gt-fields-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bread-gt-fields-test PRIVATE Qt6::Xml)
+if(EXISTS "${_bread_gt_zlib_dir}/zlibstatic.lib")
+  target_include_directories(bread-gt-fields-test PRIVATE "${ZLIB_INCLUDE_DIR}")
+  target_link_libraries(bread-gt-fields-test PRIVATE "${_bread_gt_zlib_dir}/zlibstatic.lib")
+else()
+  target_link_libraries(bread-gt-fields-test PRIVATE ZLIB::ZLIB)
+endif()
+set_target_properties(
+  bread-gt-fields-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
+)
