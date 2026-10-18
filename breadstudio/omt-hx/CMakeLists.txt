@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 3.28...3.30)
 
 # omthx comes from the OMT-HX checkout as source files, compiled against OBS's own FFmpeg (the FFmpeg::
-# targets), so the process has one FFmpeg. Its CMake project is not used: it would find a second one.
+# targets), so the process has one FFmpeg. Its CMake project is not used: it would find a second one. Only its
+# cmake/omt.cmake is, which builds libomt and libvmx from the checkout's omt/ submodules and needs no FFmpeg.
 set(OMTHX_ROOT "${CMAKE_SOURCE_DIR}/../OMT-HX" CACHE PATH "OMT-HX checkout")
-if(NOT EXISTS "${OMTHX_ROOT}/third_party/libomt/libomt.lib" OR NOT EXISTS "${OMTHX_ROOT}/src/link.cpp")
-  message(
-    FATAL_ERROR
-    "The OMT plugin needs a built OMT-HX checkout at '${OMTHX_ROOT}'. Run its scripts/build-libomt.ps1, or set -DOMTHX_ROOT=<path>."
-  )
+if(NOT EXISTS "${OMTHX_ROOT}/cmake/omt.cmake" OR NOT EXISTS "${OMTHX_ROOT}/src/link.cpp")
+  message(FATAL_ERROR "The OMT plugin needs an OMT-HX checkout at '${OMTHX_ROOT}', or set -DOMTHX_ROOT=<path>.")
 endif()
+include("${OMTHX_ROOT}/cmake/omt.cmake")
 
 find_package(FFmpeg REQUIRED COMPONENTS avcodec avutil swscale)
 
@@ -36,7 +35,7 @@ target_sources(
 
 target_include_directories(
   omt-hx
-  PRIVATE "${OMTHX_ROOT}/include" "${OMTHX_ROOT}/src" "${OMTHX_ROOT}/third_party/libomt"
+  PRIVATE "${OMTHX_ROOT}/include" "${OMTHX_ROOT}/src"
 )
 target_include_directories(omt-hx PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
 
@@ -48,19 +47,11 @@ target_link_libraries(
     FFmpeg::avcodec
     FFmpeg::avutil
     FFmpeg::swscale
-    "${OMTHX_ROOT}/third_party/libomt/libomt.lib"
+    libomt
 )
 
 # libomt.dll loads libvmx.dll from the program's folder, so both go beside obs64.exe.
-add_custom_command(
-  TARGET omt-hx
-  POST_BUILD
-  COMMAND "${CMAKE_COMMAND}" -E make_directory "${OBS_OUTPUT_DIR}/$<CONFIG>/${OBS_EXECUTABLE_DESTINATION}"
-  COMMAND
-    "${CMAKE_COMMAND}" -E copy_if_different "${OMTHX_ROOT}/third_party/libomt/libomt.dll"
-    "${OMTHX_ROOT}/third_party/libomt/libvmx.dll" "${OBS_OUTPUT_DIR}/$<CONFIG>/${OBS_EXECUTABLE_DESTINATION}"
-  VERBATIM
-)
+omthx_copy_runtime_to(omt-hx "${OBS_OUTPUT_DIR}/$<CONFIG>/${OBS_EXECUTABLE_DESTINATION}")
 
 set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
 

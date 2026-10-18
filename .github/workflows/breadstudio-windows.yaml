@@ -68,21 +68,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      # breadstudio/omt-hx will not configure without a built OMT-HX checkout at
+      # breadstudio/omt-hx will not configure without an OMT-HX checkout at
       # ../OMT-HX, and OMT-HX is its own repository. It is cloned beside this one
-      # and its libomt built from the pinned upstream sources.
+      # with its omt/ submodules; the OBS build then builds libomt and libvmx from them.
       - name: Check out OMT-HX beside the repository
         shell: pwsh
         run: |
           $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'OMT-HX'
-          git clone --depth 1 https://github.com/bmsolutionsvn/OMT-HX $sibling
+          git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/bmsolutionsvn/OMT-HX $sibling
           Write-Host "OMT-HX is at $sibling"
-
-      - name: Build libomt
-        shell: pwsh
-        run: |
-          $sibling = Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'OMT-HX'
-          & (Join-Path $sibling 'scripts/build-libomt.ps1')
 
       # The windows-x64 preset names a generator, and the runner's Visual Studio
       # is whatever the image carries. Print it, so a failure to find one says
