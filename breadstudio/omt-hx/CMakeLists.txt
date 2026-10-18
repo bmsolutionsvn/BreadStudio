@@ -38,6 +38,8 @@ target_include_directories(
   PRIVATE "${OMTHX_ROOT}/include" "${OMTHX_ROOT}/src"
 )
 target_include_directories(omt-hx PRIVATE "${CMAKE_SOURCE_DIR}/breadstudio/shared")
+# omthx is built into the plugin, not used as omthx.dll
+target_compile_definitions(omt-hx PRIVATE OMTHX_STATIC)
 
 target_link_libraries(
   omt-hx
@@ -58,6 +60,7 @@ set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
 # The tile and "receiving now" lines: no OBS. Includes omthx.h, so C++20.
 add_executable(bread-omt-test test/DescribeTest.cpp Describe.cpp)
 target_include_directories(bread-omt-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${OMTHX_ROOT}/include")
+target_compile_definitions(bread-omt-test PRIVATE OMTHX_STATIC)
 set_target_properties(
   bread-omt-test
   PROPERTIES
