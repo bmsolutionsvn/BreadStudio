@@ -362,6 +362,22 @@ void limitVmixInputs(VmixPresetResult &result, int limit)
 	result.inputs.resize(keep);
 }
 
+std::string vmixReportText(const std::vector<VmixReportRow> &rows)
+{
+	std::string text;
+	for (const VmixReportRow &row : rows) {
+		if (!text.empty()) {
+			text.push_back('\n');
+		}
+		text += row.input;
+		text.push_back('\t');
+		text += row.had;
+		text.push_back('\t');
+		text += row.why;
+	}
+	return text;
+}
+
 /* The building half's pure part (V4/V5). A kind the desk can back gets its OBS
  * type; a kind with no desk input — a Skipped entry (Task 1 already reported it),
  * or an Unknown one (Task 1 carries none) — returns null and makes no input. None

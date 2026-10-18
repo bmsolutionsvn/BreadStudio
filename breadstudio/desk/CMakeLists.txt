@@ -104,6 +104,8 @@ target_sources(
     VmixBuild.cpp
     VmixPreset.cpp
     VmixPreset.hpp
+    VmixReport.cpp
+    VmixReport.hpp
 )
 
 # The one automated test: no OBS, no Qt.

@@ -496,6 +496,51 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* The report as text (§5.3): one line per row, the three fields tab-separated —
+	 * the body the report window shows and copies to the clipboard. Every row is on
+	 * its own line, in order, so nothing is dropped or summarised away (V4). */
+	{
+		const std::string bytes = fixture(dir, "cut-cacas24.vmix");
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset(bytes, result, error));
+		CHECK(result.report.size() == 2);
+		/* the two rows this preset carries, verbatim: two lines, nothing merged */
+		CHECK(vmixReportText(result.report) ==
+		      "Videos\tList\tno desk equivalent\nTransitions\tImage Sequence\tno desk equivalent");
+
+		/* every row the reader raised is here, the unknown-type ones included: all
+		 * four, in order, named as the preset named them (V4/V7) */
+		const std::string unknownBytes = fixture(dir, "written-unknowns.vmix");
+		VmixPresetResult unknowns;
+		CHECK(readVmixPreset(unknownBytes, unknowns, error));
+		CHECK(unknowns.report.size() == 4);
+		CHECK(vmixReportText(unknowns.report) ==
+		      "Blank\tvMix input type 15\tthe desk cannot name this input type\n"
+		      "Camera 1\tvMix input type 22\tthe desk cannot name this input type\n"
+		      "Blank\tvMix input type 100\tthe desk cannot name this input type\n"
+		      "Game Call\tVideo Call\tno desk equivalent");
+
+		/* everything mapped: the text is empty — "the whole preset came across" (§5.3) */
+		const std::string clean = fixture(dir, "written-many.vmix");
+		VmixPresetResult mapped;
+		CHECK(readVmixPreset(clean, mapped, error));
+		CHECK(mapped.report.empty());
+		CHECK(vmixReportText(mapped.report).empty());
+
+		/* a "not applied" row the build raises is carried into the text, not left
+		 * behind by the display (V4) */
+		VmixPresetResult overlays;
+		CHECK(readVmixPreset("<XML><Version>9</Version>"
+				     "<Input Type=\"12\" Title=\"C\" OriginalTitle=\"Colour\" Colour=\"0\" />"
+				     "<Overlay1>1</Overlay1></XML>",
+				     overlays, error));
+		planVmixBuild(overlays, 0);
+		CHECK(vmixReportText(overlays.report) ==
+		      "\tvMix overlays 1-4\tnot applied: the desk has no overlay bus; the inputs are imported, the routing "
+		      "is not carried");
+	}
+
 	if (failures == 0) {
 		std::printf("VmixPreset: all checks passed\n");
 	}

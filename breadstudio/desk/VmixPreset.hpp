@@ -112,6 +112,14 @@ bool readVmixPreset(const std::string &xml, VmixPresetResult &result, std::strin
  * The desk passes its own limit in, so the rule is the desk's, not the preset's. */
 void limitVmixInputs(VmixPresetResult &result, int limit);
 
+/* The report rows as plain text, one row per line, the three fields tab-separated
+ * (spec §5.3): the body the import report window shows and copies to the clipboard,
+ * so what is on screen and what is copied cannot drift. Empty when there is nothing
+ * to report — "the whole preset came across". Pure, so the format is proven without
+ * a widget while the window's own decoration (the localized headings and the empty
+ * line) stays out of it. */
+std::string vmixReportText(const std::vector<VmixReportRow> &rows);
+
 /* The building half (spec §5.4). Walks `result` and makes each input through the
  * desk's own InputModel, so an imported input is a desk input, not a hand-built
  * source: the same fixed shape, the same loop refusal, the same numbering. Every
