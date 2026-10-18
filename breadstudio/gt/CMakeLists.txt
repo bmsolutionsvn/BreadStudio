@@ -5,13 +5,14 @@ if(NOT OS_WINDOWS)
   return()
 endif()
 
+find_package(Qt6 REQUIRED Xml)
 find_package(ZLIB REQUIRED)
 
 add_library(bread-gt MODULE)
 add_library(OBS::bread-gt ALIAS bread-gt)
 
-target_sources(bread-gt PRIVATE gt.cpp GtPackage.cpp)
-target_link_libraries(bread-gt PRIVATE OBS::libobs ZLIB::ZLIB)
+target_sources(bread-gt PRIVATE gt.cpp GtPackage.cpp GtDocument.cpp)
+target_link_libraries(bread-gt PRIVATE OBS::libobs Qt6::Xml ZLIB::ZLIB)
 
 set_target_properties_obs(bread-gt PROPERTIES FOLDER plugins/bread-gt PREFIX "")
 
@@ -30,5 +31,14 @@ endif()
 target_compile_definitions(bread-gt-package-test PRIVATE GT_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
 set_target_properties(
   bread-gt-package-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
+)
+
+# The document parser: no OBS, and the one gt test that needs Qt (Qt6::Xml for QDomDocument).
+add_executable(bread-gt-document-test test/GtDocumentTest.cpp GtDocument.cpp)
+target_include_directories(bread-gt-document-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bread-gt-document-test PRIVATE Qt6::Xml)
+set_target_properties(
+  bread-gt-document-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
 )
