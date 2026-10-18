@@ -58,3 +58,11 @@ set_target_properties(
   bread-gt-fields-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
 )
+
+# The clock formatter: no OBS, no Qt, no zlib.
+add_executable(bread-gt-clock-test test/GtClockTest.cpp GtClock.cpp)
+target_include_directories(bread-gt-clock-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(
+  bread-gt-clock-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
+)
