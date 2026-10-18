@@ -11,8 +11,8 @@ find_package(ZLIB REQUIRED)
 add_library(bread-gt MODULE)
 add_library(OBS::bread-gt ALIAS bread-gt)
 
-target_sources(bread-gt PRIVATE gt.cpp GtPackage.cpp GtDocument.cpp)
-target_link_libraries(bread-gt PRIVATE OBS::libobs Qt6::Xml ZLIB::ZLIB)
+target_sources(bread-gt PRIVATE gt.cpp GtPackage.cpp GtDocument.cpp GtRenderer.cpp GtText.cpp)
+target_link_libraries(bread-gt PRIVATE OBS::libobs Qt6::Xml ZLIB::ZLIB d3d11 dxgi d2d1 dwrite windowscodecs)
 
 set_target_properties_obs(bread-gt PROPERTIES FOLDER plugins/bread-gt PREFIX "")
 
@@ -64,5 +64,21 @@ add_executable(bread-gt-clock-test test/GtClockTest.cpp GtClock.cpp)
 target_include_directories(bread-gt-clock-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(
   bread-gt-clock-test
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
+)
+
+# The local render test: the Direct2D/DirectWrite renderer, the package reader and the parser. It runs
+# on the owner's PC against F:/Stream and a folder of vMix snapshots, and skips when they are absent.
+add_executable(bread-gt-render-test test/GtRenderTest.cpp GtRenderer.cpp GtText.cpp GtPackage.cpp GtDocument.cpp)
+target_include_directories(bread-gt-render-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bread-gt-render-test PRIVATE Qt6::Xml d3d11 dxgi d2d1 dwrite windowscodecs)
+if(EXISTS "${_bread_gt_zlib_dir}/zlibstatic.lib")
+  target_include_directories(bread-gt-render-test PRIVATE "${ZLIB_INCLUDE_DIR}")
+  target_link_libraries(bread-gt-render-test PRIVATE "${_bread_gt_zlib_dir}/zlibstatic.lib")
+else()
+  target_link_libraries(bread-gt-render-test PRIVATE ZLIB::ZLIB)
+endif()
+set_target_properties(
+  bread-gt-render-test
   PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/breadstudio/gt/test-bin" FOLDER plugins/bread-gt
 )

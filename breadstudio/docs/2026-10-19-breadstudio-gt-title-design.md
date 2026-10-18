@@ -159,9 +159,12 @@ Objects:
 - **`Text3D`** — a TextBlock with extrusion depth (`Dimensions` z). Used only by
   the two Timer files.
 - **`Image`** — `<Image.Bitmap><Bitmap Source="NAME"/>`, `SizeMode` (default
-  `Centered`; also Normal, Stretch, TopRight). *Verify* what Centered does to a
-  picture whose size differs from `Dimensions` — the owner swaps logos and
-  player photos of other sizes into these fields.
+  `Centered`; also Normal, Stretch, TopRight). What Centered does to a picture
+  whose size differs from `Dimensions` — the owner swaps logos and player
+  photos of other sizes into these fields — is **not yet confirmed against
+  vMix**: when this renderer was built, vMix's HTTP API did not answer, so no
+  reference snapshot could be taken (Step 2 of the plan, §9). The renderer
+  draws Centered as natural size centred in the object's bounds.
 - **`Rectangle`** (`Radius` x,y; corner `Style` Rounded), **`Ellipse`** —
   `Fill`, `Stroke`, `StrokeThickness`.
 - **`Brush`** — `Color="#AARRGGBB"` for a solid colour; with `StartPoint`,
@@ -338,9 +341,10 @@ Today a GT input (type 9000) becomes an empty text source and a report row
   rule as the `.gtzip`, case-insensitively, as Windows paths are. Each picture
   found by the rule is a report row naming both paths, so a wrong match is
   never silent. A value that is the package's own resource name (TagCamIG's
-  `BG.Source`) is that resource. An empty value (MAN OF THE MATCH's `IMG PLY`)
-  means whatever vMix draws for it — *verify* in vMix (§9) whether that is
-  nothing or the file's own picture.
+  `BG.Source`) is that resource. What vMix draws for an empty value (MAN OF THE
+  MATCH's `IMG PLY`) — nothing, or the file's own picture — is **not yet
+  confirmed against vMix**: when this renderer was built, vMix's HTTP API did
+  not answer, so no reference snapshot could be taken (Step 2 of the plan, §9).
 - **Data source links:** the `DataSourcesXML` attribute
   (`<dataSources><dataSource name="FIELD"><mapper instanceId table column
   format row/>…`) is stored on the input unchanged, for project 3, and each
