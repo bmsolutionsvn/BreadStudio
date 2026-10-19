@@ -70,7 +70,8 @@ set_target_properties(
 
 # The local render test: the Direct2D/DirectWrite renderer, the package reader and the parser. It runs
 # on the owner's PC against F:/Stream and a folder of vMix snapshots, and skips when they are absent.
-add_executable(bread-gt-render-test test/GtRenderTest.cpp GtRenderer.cpp GtText.cpp GtPackage.cpp GtDocument.cpp)
+add_executable(bread-gt-render-test test/GtRenderTest.cpp GtRenderer.cpp GtText.cpp GtPackage.cpp GtDocument.cpp
+                                  GtFields.cpp GtClock.cpp)
 target_include_directories(bread-gt-render-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(bread-gt-render-test PRIVATE Qt6::Xml d3d11 dxgi d2d1 dwrite windowscodecs)
 if(EXISTS "${_bread_gt_zlib_dir}/zlibstatic.lib")

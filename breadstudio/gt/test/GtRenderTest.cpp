@@ -11,7 +11,9 @@
 
    Usage: GtRenderTest <gtzip folder> <reference folder> <out folder> */
 
+#include "GtClock.hpp"
 #include "GtDocument.hpp"
+#include "GtFields.hpp"
 #include "GtPackage.hpp"
 #include "GtRenderer.hpp"
 
@@ -626,7 +628,16 @@ int main(int argc, char **argv)
 			continue;
 		}
 		renderer.load(package, document);
+		/* The source expands a clock's {0:...} when it draws (breadstudio/gt/gt-source.cpp), so the
+		 * test must too, or a clock field would be compared to vMix as its raw format string. A
+		 * fixed time keeps a render deterministic and therefore comparable. */
 		GtFrameState state;
+		const GtClockTime at = {2026, 10, 19, 21, 5, 9, 42, 1};
+		for (const GtField &field : gtFields(document)) {
+			if (field.type == GtFieldType::Text) {
+				state.text[field.name] = gtExpandClock(field.defaultValue, at).text;
+			}
+		}
 		std::vector<uint8_t> ours;
 		if (!renderer.draw(target.Get(), state) ||
 		    !readback(device.Get(), context.Get(), target.Get(), width, height, ours)) {
