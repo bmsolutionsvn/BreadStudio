@@ -631,6 +631,67 @@ static void shadowCheck(ID3D11Device *device, ID3D11DeviceContext *context)
 	}
 }
 
+/* Task 3 (Finding 4): vMix cuts a TextBlock's text at its box's top and bottom edges. This text
+ * wraps past a 200x30 box; nothing below the box may be painted, and the text inside it must
+ * still be drawn. */
+static void clipCheck(ID3D11Device *device, ID3D11DeviceContext *context)
+{
+	const int width = 320, height = 120;
+	ComPtr<ID3D11Texture2D> target;
+	REQUIRE(createTarget(device, width, height, target));
+	if (!target) {
+		return;
+	}
+
+	GtDocument document;
+	document.width = (float)width;
+	document.height = (float)height;
+	GtObject text;
+	text.kind = "TextBlock";
+	text.name = "Long";
+	text.x = 10;
+	text.y = 10;
+	text.width = 200;
+	text.height = 30;
+	text.text = "ONE TWO THREE FOUR FIVE SIX SEVEN";
+	text.fontFamily = "Arial";
+	text.fontSize = 28;
+	text.fill.type = GtBrushType::Solid;
+	text.fill.argb = 0xFFFFFFFFu;
+	document.objects.push_back(text);
+
+	GtRenderer renderer;
+	std::string error;
+	REQUIRE(renderer.init(device, error));
+	GtPackage package;
+	renderer.load(package, document);
+	GtFrameState state;
+	REQUIRE(renderer.draw(target.Get(), state));
+
+	std::vector<uint8_t> pixels;
+	REQUIRE(readback(device, context, target.Get(), width, height, pixels));
+	if (pixels.empty()) {
+		return;
+	}
+
+	bool belowClear = true;
+	bool white = false;
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			const uint8_t *pixel = pixels.data() + ((size_t)y * width + x) * 4;
+			if (y >= 41 && pixel[3] != 0) {
+				belowClear = false;
+			}
+			const bool inside = y >= 10 && y < 40;
+			if (inside && pixel[3] > 200 && pixel[0] > 200 && pixel[1] > 200 && pixel[2] > 200) {
+				white = true;
+			}
+		}
+	}
+	REQUIRE(belowClear);
+	REQUIRE(white);
+}
+
 static fs::path withSuffix(const fs::path &png, const char *suffix)
 {
 	fs::path out = png;
@@ -652,6 +713,7 @@ int main(int argc, char **argv)
 	compareCheck();
 	selfCheck(device.Get(), context.Get());
 	shadowCheck(device.Get(), context.Get());
+	clipCheck(device.Get(), context.Get());
 	glyphCheck();
 
 	if (argc < 4) {

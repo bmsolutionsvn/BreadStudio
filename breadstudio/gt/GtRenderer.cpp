@@ -371,9 +371,20 @@ void drawText(GtRendererImpl &impl, DrawContext &ctx, const GtObject &object)
 	}
 	ComPtr<ID2D1Brush> fill = makeBrush(impl, object.fill, fillOverride, hasOverride, object.width, object.height);
 	ComPtr<ID2D1Brush> stroke = makeBrush(impl, object.stroke, 0, false, object.width, object.height);
+	/* vMix cuts a TextBlock's text at its box's top and bottom edges (plan Finding 4): text that
+	 * wraps past Dimensions must not paint over its neighbours. The context is in the object's
+	 * space here, so the box is (0,0) to its size. */
+	const float clipWidth = object.width > 0 ? object.width : 1.0f;
+	const float clipHeight = object.height > 0 ? object.height : 1.0f;
+	/* ponytail: an axis-aligned clip uses the transformed box's bounds under Skew, not the skewed
+	 * box itself; a geometry layer is the upgrade if a skewed overflowing title ever appears. */
+	impl.context->PushAxisAlignedClip(D2D1::RectF(0, 0, clipWidth, clipHeight),
+					  D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 	std::string missingFamily;
-	if (!gtDrawText(impl.context.Get(), impl.dwrite.Get(), impl.d2dFactory.Get(), object, style, text, fill.Get(),
-			stroke.Get(), missingFamily)) {
+	const bool drawn = gtDrawText(impl.context.Get(), impl.dwrite.Get(), impl.d2dFactory.Get(), object, style, text,
+				      fill.Get(), stroke.Get(), missingFamily);
+	impl.context->PopAxisAlignedClip();
+	if (!drawn) {
 		ctx.fontFamilies[missingFamily].push_back(field.empty() ? object.name : field);
 	}
 }
