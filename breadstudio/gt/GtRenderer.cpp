@@ -450,7 +450,14 @@ void drawShadow(GtRendererImpl &impl, DrawContext &ctx, const GtObject &object, 
 	effect->SetInput(0, list);
 	ComPtr<ID2D1Image> output;
 	effect->GetOutput(&output);
-	impl.context->SetTransform(D2D1::Matrix3x2F::Translation(shadow.offsetX, shadow.offsetY) * matrix);
+	/* The list already holds world-space drawing, so move it by the offset in the object's own
+	 * space: inverse(matrix) * Translation(offset) * matrix (row-vector order, left applied first). */
+	D2D1_MATRIX_3X2_F moved = D2D1::Matrix3x2F::Translation(shadow.offsetX, shadow.offsetY);
+	D2D1::Matrix3x2F inverse(matrix.m11, matrix.m12, matrix.m21, matrix.m22, matrix.dx, matrix.dy);
+	if (inverse.Invert()) {
+		moved = inverse * moved * matrix;
+	}
+	impl.context->SetTransform(moved);
 	impl.context->DrawImage(output.Get());
 	impl.context->SetTransform(matrix);
 }

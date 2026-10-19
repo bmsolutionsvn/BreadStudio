@@ -556,6 +556,81 @@ static void selfCheck(ID3D11Device *device, ID3D11DeviceContext *context)
 	REQUIRE(white > 0);
 }
 
+/* Task 2 (Review Focus 2): a shadow is offset once, in the object's own space. The same must hold
+ * when the object sits inside a Layer, whose translation is part of the object's matrix. Two
+ * documents, drawn on their own, so one shadow cannot satisfy the other's check. */
+static void shadowCheck(ID3D11Device *device, ID3D11DeviceContext *context)
+{
+	const int width = 320, height = 120;
+
+	GtObject shadowed;
+	shadowed.kind = "Rectangle";
+	shadowed.name = "Shadowed";
+	shadowed.width = 40;
+	shadowed.height = 20;
+	shadowed.fill.type = GtBrushType::Solid;
+	shadowed.fill.argb = 0xFFFFFFFFu;
+	GtEffect shadow;
+	shadow.type = "Shadow";
+	shadow.offsetX = 10;
+	shadow.offsetY = 10;
+	shadow.blur = 0;
+	shadow.argb = 0xFF000000u;
+	shadowed.effects.push_back(shadow);
+
+	const auto draw = [&](const GtDocument &document, std::vector<uint8_t> &pixels) {
+		ComPtr<ID3D11Texture2D> target;
+		REQUIRE(createTarget(device, width, height, target));
+		if (!target) {
+			return;
+		}
+		GtRenderer renderer;
+		std::string error;
+		REQUIRE(renderer.init(device, error));
+		GtPackage package;
+		renderer.load(package, document);
+		GtFrameState state;
+		REQUIRE(renderer.draw(target.Get(), state));
+		REQUIRE(readback(device, context, target.Get(), width, height, pixels));
+	};
+
+	GtDocument plain;
+	plain.width = (float)width;
+	plain.height = (float)height;
+	GtObject atOrigin = shadowed;
+	atOrigin.x = 80;
+	atOrigin.y = 56;
+	plain.objects.push_back(atOrigin);
+	std::vector<uint8_t> plainPixels;
+	draw(plain, plainPixels);
+	if (!plainPixels.empty()) {
+		const size_t pixel = ((size_t)80 * width + 125) * 4;
+		REQUIRE(plainPixels[pixel + 3] > 128); /* inside the shadow, outside the object */
+	}
+
+	GtDocument layered;
+	layered.width = (float)width;
+	layered.height = (float)height;
+	GtObject layer;
+	layer.kind = "Layer";
+	layer.name = "Group";
+	layer.x = 20;
+	layer.y = 0;
+	layer.compWidth = (float)width;
+	layer.compHeight = (float)height;
+	GtObject inLayer = shadowed;
+	inLayer.x = 80;
+	inLayer.y = 56;
+	layer.children.push_back(inLayer);
+	layered.objects.push_back(layer);
+	std::vector<uint8_t> layeredPixels;
+	draw(layered, layeredPixels);
+	if (!layeredPixels.empty()) {
+		const size_t pixel = ((size_t)80 * width + 145) * 4;
+		REQUIRE(layeredPixels[pixel + 3] > 128); /* the layer's Location is part of the matrix */
+	}
+}
+
 static fs::path withSuffix(const fs::path &png, const char *suffix)
 {
 	fs::path out = png;
@@ -576,6 +651,7 @@ int main(int argc, char **argv)
 
 	compareCheck();
 	selfCheck(device.Get(), context.Get());
+	shadowCheck(device.Get(), context.Get());
 	glyphCheck();
 
 	if (argc < 4) {
