@@ -179,7 +179,8 @@ set_target_properties(
 
 # The vMix preset reader: no OBS, and the one desk test that needs Qt (Qt6::Xml for QDomDocument).
 add_executable(bread-vmix-test test/VmixPresetTest.cpp VmixPreset.cpp)
-target_include_directories(bread-vmix-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+# The gt module's settings header is in ../gt, included by VmixPreset.cpp and the test.
+target_include_directories(bread-vmix-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../gt")
 target_link_libraries(bread-vmix-test PRIVATE Qt6::Xml)
 target_compile_definitions(bread-vmix-test PRIVATE VMIX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
 set_target_properties(

@@ -1,3 +1,4 @@
+#include "GtSettings.hpp"
 #include "VmixPreset.hpp"
 
 #include <cmath>
@@ -120,7 +121,8 @@ int main(int argc, char **argv)
 
 			const VmixInput &title = result.inputs[3];
 			CHECK(title.number == 4);
-			CHECK(title.kind == VmixKind::Title);
+			/* clock.gtzip is Type 9000: a GT title, not a plain .xaml Title */
+			CHECK(title.kind == VmixKind::GtTitle);
 			CHECK(title.originalTitle == "clock.gtzip");
 
 			const VmixInput &video = result.inputs[4];
@@ -308,6 +310,8 @@ int main(int argc, char **argv)
 		CHECK(std::string(vmixBaseId(VmixKind::Browser)) == "browser_source");
 		CHECK(std::string(vmixBaseId(VmixKind::DesktopCapture)) == "monitor_capture");
 		CHECK(std::string(vmixBaseId(VmixKind::Title)) == "text_ft2_source");
+		/* a Type 9000 GT title is a real GT title input, not a plain text source */
+		CHECK(std::string(vmixBaseId(VmixKind::GtTitle)) == gt::SourceId);
 		/* the two that make no input: a kind with no desk equivalent, and one the
 		 * spec cannot name (which the read does not even carry) */
 		CHECK(vmixBaseId(VmixKind::Skipped) == nullptr);
@@ -329,11 +333,12 @@ int main(int argc, char **argv)
 		if (steps.size() == 4) {
 			CHECK(steps[0].input->kind == VmixKind::Image);
 			CHECK(steps[1].input->kind == VmixKind::Colour);
-			CHECK(steps[2].input->kind == VmixKind::Title);
+			CHECK(steps[2].input->kind == VmixKind::GtTitle);
 			CHECK(steps[3].input->kind == VmixKind::Video);
 			CHECK(std::string(steps[0].baseId) == "image_source");
 			CHECK(std::string(steps[1].baseId) == "color_source");
-			CHECK(std::string(steps[2].baseId) == "text_ft2_source");
+			/* the Type 9000 clock base is the GT title source, not text_ft2_source */
+			CHECK(std::string(steps[2].baseId) == gt::SourceId);
 			CHECK(std::string(steps[3].baseId) == "ffmpeg_source");
 		}
 		/* no desk base for the two skipped kinds, so no step named one */
@@ -539,6 +544,122 @@ int main(int argc, char **argv)
 		CHECK(vmixReportText(overlays.report) ==
 		      "\tvMix overlays 1-4\tnot applied: the desk has no overlay bus; the inputs are imported, the routing "
 		      "is not carried");
+	}
+
+	/* A GT title input (Type 9000) reads as a GT title, not a plain text source
+	 * (§6): the .gtzip's path from the element's text, its values and styles from
+	 * the `XML` attribute, every countdown from `CountdownXML`, and the data links
+	 * counted from `DataSourcesXML`. Three inputs, in the shape of the owner's
+	 * EAFC24 preset: two share one .gtzip and carry different values. */
+	{
+		const std::string bytes = fixture(dir, "gt-titles.vmix");
+		CHECK(!bytes.empty());
+		VmixPresetResult result;
+		std::string error;
+		CHECK(readVmixPreset(bytes, result, error));
+		CHECK(error.empty());
+		CHECK(result.inputs.size() == 3);
+		if (result.inputs.size() == 3) {
+			const VmixInput &left = result.inputs[0];
+			CHECK(left.kind == VmixKind::GtTitle);
+			CHECK(left.type == 9000);
+			CHECK(left.titleFile == "C:\\EAFC24\\GT\\TagWin\\TagWin.gtzip");
+			CHECK(left.titleItems.size() == 1);
+			if (left.titleItems.size() == 1) {
+				CHECK(left.titleItems[0].name == "PlayerName.Text");
+				CHECK(left.titleItems[0].value == "Player Left");
+				CHECK(!left.titleItems[0].hasStyle); /* no <Font>: the file's own style */
+			}
+			CHECK(left.dataLinks == 1);
+			CHECK(!left.dataSourcesXml.empty());
+			CHECK(left.countdowns.size() == 1);
+			if (left.countdowns.size() == 1) {
+				CHECK(left.countdowns[0].start == "00:00:00");
+				CHECK(left.countdowns[0].duration == "00:00:00");
+				CHECK(left.countdowns[0].format == "HH:mm:ss");
+				CHECK(!left.countdowns[0].reverse);
+				CHECK(!left.countdowns[0].reverseDisplay);
+			}
+
+			/* the same .gtzip as a second input, with its own value (§6) */
+			const VmixInput &right = result.inputs[1];
+			CHECK(right.kind == VmixKind::GtTitle);
+			CHECK(right.titleFile == left.titleFile);
+			CHECK(right.titleItems.size() == 1);
+			if (right.titleItems.size() == 1) {
+				CHECK(right.titleItems[0].name == "PlayerName.Text");
+				CHECK(right.titleItems[0].value == "Player Right");
+			}
+			CHECK(right.dataLinks == 1);
+
+			const VmixInput &time = result.inputs[2];
+			CHECK(time.kind == VmixKind::GtTitle);
+			CHECK(time.titleItems.size() == 1);
+			if (time.titleItems.size() == 1) {
+				CHECK(time.titleItems[0].name == "Time.Text");
+				CHECK(time.titleItems[0].hasStyle);
+				CHECK(time.titleItems[0].font == "Helvetica Neue");
+				CHECK(time.titleItems[0].size == 192);
+				CHECK(time.titleItems[0].fill == "#FF00FFFF");
+				CHECK(time.titleItems[0].style == "Italic");
+				CHECK(time.titleItems[0].weight == "Bold");
+				CHECK(time.titleItems[0].stretch == "Normal");
+				CHECK(time.titleItems[0].lineSpacing == 0);
+			}
+			CHECK(time.countdowns.size() == 1);
+			if (time.countdowns.size() == 1) {
+				CHECK(time.countdowns[0].duration == "00:20:00");
+				CHECK(time.countdowns[0].format == "mm:ss");
+			}
+			CHECK(time.dataLinks == 1);
+		}
+		/* a GT title is a kind the desk can back: no report row for it */
+		CHECK(result.report.empty());
+	}
+
+	/* The three small XML documents the GT input carries, read on their own (§6):
+	 * a <dataSource> with no mapper is not a link, a value can be any UTF-8 text
+	 * (Vietnamese must survive — Review Focus 2), and the two path helpers. */
+	{
+		CHECK(countVmixDataLinks("<dataSources><dataSource name=\"X\" /></dataSources>") == 0);
+		CHECK(countVmixDataLinks(
+			      "<dataSources><dataSource name=\"X\"><mapper column=\"A\" /></dataSource></dataSources>") == 1);
+		CHECK(countVmixDataLinks("") == 0);
+
+		/* the value is UTF-8, byte for byte, through the preset's own XML */
+		const std::vector<VmixTitleItem> items = readVmixTitleItems(
+			"<items><item name=\"N.Text\" version=\"2\"><value>Nguyễn Văn Á</value></item></items>");
+		CHECK(items.size() == 1);
+		if (items.size() == 1) {
+			CHECK(items[0].name == "N.Text");
+			CHECK(items[0].value == "Nguyễn Văn Á");
+			CHECK(!items[0].hasStyle);
+		}
+		CHECK(readVmixTitleItems("<items />").empty());
+		CHECK(readVmixTitleItems("not xml").empty());
+
+		/* every countdown, in order; an empty or malformed document reads none */
+		CHECK(readVmixCountdowns("").empty());
+		CHECK(readVmixCountdowns("not xml").empty());
+
+		/* relocation with a fake filesystem (§6): the stored path if it exists,
+		 * else the path's tail under the preset's folder, dropped one folder at a
+		 * time; %XX is decoded and / turned into \ first. Nothing found is "" */
+		auto fs = [](const std::string &p) {
+			return p == "F:\\Stream\\EAFC24\\GT\\TagWin\\TagWin.gtzip" ||
+			       p == "F:\\Stream\\FVPL SUMMER 2024\\LOGO\\T4M.PNG";
+		};
+		CHECK(findVmixFile("C:\\EAFC24\\GT\\TagWin\\TagWin.gtzip", "F:\\Stream\\EAFC24", fs) ==
+		      "F:\\Stream\\EAFC24\\GT\\TagWin\\TagWin.gtzip");
+		CHECK(findVmixFile("file:///C:/FVPL%20SUMMER%202024/LOGO/T4M.PNG", "F:\\Stream\\FVPL SUMMER 2024", fs) ==
+		      "F:\\Stream\\FVPL SUMMER 2024\\LOGO\\T4M.PNG");
+		CHECK(findVmixFile("C:\\nowhere\\x.gtzip", "F:\\Stream\\EAFC24", fs) == "");
+
+		/* a value is absolute when it is a drive path or a file:/// URL */
+		CHECK(vmixAbsolutePath("file:///C:/a.png"));
+		CHECK(vmixAbsolutePath("C:\\a.png"));
+		CHECK(!vmixAbsolutePath("422d1b65\\BG.png"));
+		CHECK(!vmixAbsolutePath(""));
 	}
 
 	if (failures == 0) {

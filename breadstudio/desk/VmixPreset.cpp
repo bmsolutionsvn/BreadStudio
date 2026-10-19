@@ -1,5 +1,7 @@
 #include "VmixPreset.hpp"
 
+#include "../gt/GtSettings.hpp"
+
 #include <QByteArray>
 #include <QDomDocument>
 #include <QDomElement>
@@ -24,9 +26,10 @@ static VmixKind kindOfType(int type)
 		return VmixKind::Video;
 	case 1: /* an image, *.png */
 		return VmixKind::Image;
-	case 2:    /* vMix's Title, a *.xaml */
-	case 9000: /* a *.gtzip GT title */
+	case 2: /* vMix's Title, a *.xaml */
 		return VmixKind::Title;
+	case 9000: /* a *.gtzip GT title, a real GT title input (§6) */
+		return VmixKind::GtTitle;
 	case 5: /* Camera / Video Capture */
 		return VmixKind::Capture;
 	case 7: /* an audio capture device */
@@ -198,6 +201,184 @@ static void readMatrix(const QDomElement &element, VmixInput &input)
 	}
 }
 
+/* The GT title input's small XML documents (§6). vMix writes them as attributes
+ * on the <Input>, and each is a whole document; they are parsed with QDomDocument
+ * from a QByteArray, as the GT document parser is. A parse that fails reads
+ * nothing, so a preset that carries a shape this spec cannot read reports nothing
+ * rather than guessing. */
+static bool parseSmallXml(const std::string &xml, QDomDocument &document)
+{
+	return static_cast<bool>(document.setContent(QByteArray::fromStdString(xml)));
+}
+
+std::vector<VmixTitleItem> readVmixTitleItems(const std::string &itemsXml)
+{
+	std::vector<VmixTitleItem> items;
+	QDomDocument document;
+	if (!parseSmallXml(itemsXml, document)) {
+		return items;
+	}
+
+	for (QDomElement node = document.documentElement().firstChildElement(QStringLiteral("item")); !node.isNull();
+	     node = node.nextSiblingElement(QStringLiteral("item"))) {
+		VmixTitleItem item;
+		item.name = node.attribute(QStringLiteral("name")).toStdString();
+		item.value = node.firstChildElement(QStringLiteral("value")).text().toStdString();
+
+		/* An item may carry the field's style in a <Font> (§6/§4.4); without one
+		 * the field keeps the .gtzip's own, so no style is claimed. */
+		const QDomElement font = node.firstChildElement(QStringLiteral("Font"));
+		if (!font.isNull()) {
+			item.hasStyle = true;
+			item.font = font.attribute(QStringLiteral("Name")).toStdString();
+			item.fill = font.attribute(QStringLiteral("FillColor")).toStdString();
+			item.style = font.attribute(QStringLiteral("Style")).toStdString();
+			item.weight = font.attribute(QStringLiteral("Weight")).toStdString();
+			item.stretch = font.attribute(QStringLiteral("Stretch")).toStdString();
+			bool ok = false;
+			item.size = font.attribute(QStringLiteral("Size")).toDouble(&ok);
+			if (!ok) {
+				item.size = 0;
+			}
+			ok = false;
+			item.lineSpacing = font.attribute(QStringLiteral("LineSpacing")).toDouble(&ok);
+			if (!ok) {
+				item.lineSpacing = 0;
+			}
+		}
+		items.push_back(item);
+	}
+
+	return items;
+}
+
+std::vector<VmixCountdown> readVmixCountdowns(const std::string &countdownXml)
+{
+	std::vector<VmixCountdown> countdowns;
+	QDomDocument document;
+	if (!parseSmallXml(countdownXml, document)) {
+		return countdowns;
+	}
+
+	/* Every entry, in order — even a 00:00:00 one, which is what most of the
+	 * owner's inputs carry and the build half (Task 11) is what drops. */
+	for (QDomElement node = document.documentElement().firstChildElement(QStringLiteral("CountdownSettings"));
+	     !node.isNull(); node = node.nextSiblingElement(QStringLiteral("CountdownSettings"))) {
+		VmixCountdown countdown;
+		countdown.start = node.firstChildElement(QStringLiteral("StartString")).text().toStdString();
+		countdown.duration = node.firstChildElement(QStringLiteral("DurationString")).text().toStdString();
+		countdown.format = node.firstChildElement(QStringLiteral("Format")).text().toStdString();
+		countdown.reverse =
+			node.firstChildElement(QStringLiteral("Reverse")).text() == QStringLiteral("true");
+		countdown.reverseDisplay =
+			node.firstChildElement(QStringLiteral("ReverseDisplay")).text() == QStringLiteral("true");
+		countdowns.push_back(countdown);
+	}
+
+	return countdowns;
+}
+
+int countVmixDataLinks(const std::string &dataSourcesXml)
+{
+	QDomDocument document;
+	if (!parseSmallXml(dataSourcesXml, document)) {
+		return 0;
+	}
+	/* One link per <mapper>: a <dataSource> with no mapper (CACAS24 has one) is
+	 * not a link and is not reported (§6). */
+	return document.elementsByTagName(QStringLiteral("mapper")).count();
+}
+
+/* A stored path with %XX decoded and / turned into \ (§6): vMix writes a picture
+ * value as a path or a file:/// URL, and Windows paths use backslashes. */
+static std::string normaliseVmixPath(const std::string &value)
+{
+	auto hex = [](char h) -> int {
+		if (h >= '0' && h <= '9') {
+			return h - '0';
+		}
+		if (h >= 'a' && h <= 'f') {
+			return h - 'a' + 10;
+		}
+		if (h >= 'A' && h <= 'F') {
+			return h - 'A' + 10;
+		}
+		return -1;
+	};
+
+	std::string out;
+	out.reserve(value.size());
+	for (std::size_t i = 0; i < value.size(); i++) {
+		const char c = value[i];
+		if (c == '%' && i + 2 < value.size()) {
+			const int hi = hex(value[i + 1]);
+			const int lo = hex(value[i + 2]);
+			if (hi >= 0 && lo >= 0) {
+				out.push_back(static_cast<char>((hi << 4) | lo));
+				i += 2;
+				continue;
+			}
+		}
+		out.push_back(c == '/' ? '\\' : c);
+	}
+	return out;
+}
+
+bool vmixAbsolutePath(const std::string &value)
+{
+	const QString text = QString::fromStdString(value);
+	if (text.startsWith(QStringLiteral("file://"), Qt::CaseInsensitive)) {
+		return true;
+	}
+	return text.size() >= 3 && text.at(0).isLetter() && text.at(1) == QLatin1Char(':') &&
+	       (text.at(2) == QLatin1Char('\\') || text.at(2) == QLatin1Char('/'));
+}
+
+std::string findVmixFile(const std::string &stored, const std::string &presetDir,
+			 const std::function<bool(const std::string &)> &exists)
+{
+	const std::string normalised = normaliseVmixPath(stored);
+	if (exists(normalised)) {
+		return normalised;
+	}
+	if (presetDir.empty()) {
+		return "";
+	}
+
+	/* The path's segments, so the tail can be grown from the last one back. */
+	std::vector<std::string> segments;
+	for (std::size_t start = 0; start <= normalised.size();) {
+		const std::size_t slash = normalised.find('\\', start);
+		if (slash == std::string::npos) {
+			segments.push_back(normalised.substr(start));
+			break;
+		}
+		segments.push_back(normalised.substr(start, slash - start));
+		start = slash + 1;
+	}
+
+	/* Drop leading folders one at a time: the last segment first, then the two
+	 * before it, and so on, so a preset that moved machine still finds the file
+	 * beside it. Nothing found is "" — the build half reports that, not guesses. */
+	for (std::size_t drop = 0; drop < segments.size(); drop++) {
+		std::string tail;
+		for (std::size_t i = drop; i < segments.size(); i++) {
+			if (!tail.empty()) {
+				tail.push_back('\\');
+			}
+			tail += segments[i];
+		}
+		if (tail.empty()) {
+			continue;
+		}
+		const std::string candidate = presetDir + "\\" + tail;
+		if (exists(candidate)) {
+			return candidate;
+		}
+	}
+	return "";
+}
+
 bool readVmixPreset(const std::string &xml, VmixPresetResult &result, std::string &error)
 {
 	result = VmixPresetResult();
@@ -266,6 +447,19 @@ bool readVmixPreset(const std::string &xml, VmixPresetResult &result, std::strin
 		}
 		case VmixKind::Colour:
 			input.colour = element.attribute(QStringLiteral("Colour")).toStdString();
+			break;
+		case VmixKind::GtTitle:
+			/* §6: the .gtzip's full path is the element's own text; the field
+			 * values, their styles, the countdowns and the data links are
+			 * attributes, each a whole XML document of its own. */
+			input.titleFile = element.text().trimmed().toStdString();
+			input.titleItems =
+				readVmixTitleItems(element.attribute(QStringLiteral("XML")).toStdString());
+			input.countdowns =
+				readVmixCountdowns(element.attribute(QStringLiteral("CountdownXML")).toStdString());
+			input.dataSourcesXml =
+				element.attribute(QStringLiteral("DataSourcesXML")).toStdString();
+			input.dataLinks = countVmixDataLinks(input.dataSourcesXml);
 			break;
 		default:
 			break;
@@ -408,6 +602,10 @@ const char *vmixBaseId(VmixKind kind)
 	case VmixKind::Title:
 		/* §10: a vMix title imports as a plain text source, the rest reported. */
 		return "text_ft2_source";
+	case VmixKind::GtTitle:
+		/* §6: a Type 9000 GT title is a real GT title input, so its values and
+		 * countdowns are carried rather than flattened to text. */
+		return gt::SourceId;
 	case VmixKind::Unknown:
 	case VmixKind::Skipped:
 		return nullptr;

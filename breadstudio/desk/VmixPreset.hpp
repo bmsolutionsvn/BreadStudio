@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -17,9 +18,30 @@ enum class VmixKind {
 	NDI,
 	Browser,
 	DesktopCapture,
-	Title,   /* Title, GT Title */
+	Title,   /* vMix's Title, a .xaml */
+	GtTitle, /* a GT title, a .gtzip (vMix's Type 9000) */
 	Unknown, /* a Type this spec cannot name: reported, never guessed */
 	Skipped, /* a kind with no desk equivalent: reported */
+};
+
+/* One <item> a GT title input carries in the preset's `XML` attribute (§6): the
+ * field's vMix name (`PlayerName.Text`), its value, and, when the item carries a
+ * <Font>, the field's style. `hasStyle` false means the item names no style, so
+ * the field keeps the .gtzip's own — never an empty style. */
+struct VmixTitleItem {
+	std::string name;
+	std::string value;
+	bool hasStyle = false;
+	std::string font, fill, style, weight, stretch;
+	double size = 0, lineSpacing = 0;
+};
+
+/* One <CountdownSettings> from a GT title input's `CountdownXML` (§4.5/§6), read
+ * as written. A DurationString of 00:00:00 is no countdown — most of the owner's
+ * inputs carry one — and the build half (Task 11) is what drops it. */
+struct VmixCountdown {
+	std::string start, duration, format;
+	bool reverse = false, reverseDisplay = false;
 };
 
 /* One vMix input, read straight from the preset. */
@@ -69,6 +91,16 @@ struct VmixInput {
 
 	double volume = 1.0; /* the strip's gain, vMix's VolumeF */
 	bool muted = false;  /* the strip's ♪ */
+
+	/* A GT title (Type 9000), read from the preset (§6): the .gtzip's path from
+	 * the element's text, its field values and their styles from the `XML`
+	 * attribute, every countdown from `CountdownXML`, and the data-source links
+	 * from `DataSourcesXML`. All empty or zero for every other kind. */
+	std::string titleFile;
+	std::vector<VmixTitleItem> titleItems;
+	std::vector<VmixCountdown> countdowns;
+	std::string dataSourcesXml;
+	int dataLinks = 0; /* the <mapper> count: one link per mapper, not per <dataSource> */
 };
 
 /* One line of the report (§5.3): what vMix had, and why it is not here. */
@@ -85,6 +117,10 @@ struct VmixPresetResult {
 	int active = 0;   /* the active number, for the desk's Program */
 	int preview = 0;  /* the preview number, for the desk's Preview */
 	std::string name; /* the preset's own name, for the new Project */
+
+	/* The preset's folder, set by the caller before the build half runs (Task 11):
+	 * the base findVmixFile tries when a GT title's stored path has moved (§6). */
+	std::string presetDir;
 
 	/* The output frame the preset's matrices are relative to: the
 	 * `<OutputFormat OutputSize="WxH">` the file carries, 0 when it names none.
@@ -106,6 +142,30 @@ struct VmixPresetResult {
  * preset at all; a preset with nothing the desk can back still returns true,
  * with the reasons in `result.report`. */
 bool readVmixPreset(const std::string &xml, VmixPresetResult &result, std::string &error);
+
+/* The GT title input's small XML documents, read on their own (§6), so the read
+ * is proven without a whole preset. `itemsXml` is the `XML` attribute's <items>;
+ * `countdownXml` the `CountdownXML`'s every <CountdownSettings>, in order; and
+ * `dataSourcesXml` the `DataSourcesXML`, whose <mapper> elements are counted. A
+ * <dataSource> with no mapper is not a link. Empty or malformed input reads
+ * nothing, never throws. */
+std::vector<VmixTitleItem> readVmixTitleItems(const std::string &itemsXml);
+std::vector<VmixCountdown> readVmixCountdowns(const std::string &countdownXml);
+int countVmixDataLinks(const std::string &dataSourcesXml);
+
+/* Where a GT title's or a picture's stored path lives on this machine (§6): the
+ * stored path itself when `exists` finds it, else the path's tail joined under
+ * `presetDir`, dropping one leading folder at a time until only the last segment
+ * remains — so `C:\EAFC24\GT\TagWin\TagWin.gtzip` under `F:\Stream\EAFC24` finds
+ * `F:\Stream\EAFC24\GT\TagWin\TagWin.gtzip`. `%XX` is decoded and `/` turned
+ * into `\` first, so a `file:///C:/FVPL%20SUMMER%202024/...` URL is tried as a
+ * Windows path. "" when nothing is found. */
+std::string findVmixFile(const std::string &stored, const std::string &presetDir,
+			 const std::function<bool(const std::string &)> &exists);
+
+/* Whether a value names a location on this machine: a drive path (`C:\a.png`) or
+ * a `file:///` URL. A package resource name (`422d1b65\BG.png`) and "" are not. */
+bool vmixAbsolutePath(const std::string &value);
 
 /* A preset can hold more inputs than the desk's bar. Keeps the first `limit` and
  * moves the rest onto the report (V5); a limit of 0 or less means no bar at all.
