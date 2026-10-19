@@ -713,3 +713,61 @@ git commit -m "breadstudio: add the MultiView to the smoke checklist, and record
 | `bread_ndi_output` and `bread_omt_output` to the engine's raw-output contract | Plan F |
 | A second PC receiving over NDI and OMT | Plan F's run |
 | Mix inputs, their window, the on-air rule's extra step | Plan G |
+
+---
+
+## Review against vMix (owner's backlog B5, 2026-10-19)
+
+Owner: "Multiview should follow vmix, and need a review to see what position, size, crop, ... for
+each output." Source: the vMix User Guide at `F:\Coding\BreadMedia\vMixUserGuide.pdf` (page
+numbers below are its own). vMix uses "MultiView" for two things, and the owner's screenshot was the
+second, so both are reviewed.
+
+### 1. The MultiView output (`bread_multiview`, this plan)
+
+| vMix (guide pp. 18–19, 38–41) | BreadStudio before | Now |
+|---|---|---|
+| Layouts: Preview / Output + 8, + 14, + 2 inputs, and Legacy (+ 8, no titles or meters) | + 8 inputs only, two rows of four | unchanged — + 8 is vMix's first layout; the others are an owner decision (below) |
+| Legacy marks Preview and Output "by a coloured border" | Preview and Program boxes framed black | Preview framed green (idle with Studio Mode off), Program red |
+| Titles placed above or below the preview | title drawn over the bottom-left of the picture | a title strip under the picture; the picture is never covered |
+| Preview / Output headings read "Preview" and "Output" by default, or the input's title | "Preview" and "Program" | unchanged — "Program" is the desk's word everywhere else; an owner decision |
+| Audio meters on every box except Legacy; the Output's meter source defaults to Master | none | not done — owner decision |
+| Customise Layout: input order by number or by type; Show Inputs Only; Click to select Input | bar order; no option | not done — owner decision |
+| MultiView and MultiView2, each its own layout | one view | not done |
+| An input on Output / Preview shows its tally | a category tag **replaced** the tally, so a tagged input on air was not red | the tally wins; the tag tints only an idle slot (here and on the Layers page's view) |
+
+**Per output.** vMix lets Fullscreen 1–2 and Outputs 2–4 each show Output, Preview, MultiView or an
+input (p. 38, p. 41); BreadStudio's outputs pick the same way (`OutputEngine::sourceFor`). The view
+is drawn at the main canvas's base size and each output's own canvas scales it to that output's size
+(`OutputEngine::apply`, `canvasInfo.output_width/height`):
+
+- a window or a monitor projector shows it whole, letterboxed by OBS's projector;
+- an NDI, OMT or SRT output at the canvas's aspect gets an exact scale; **at another aspect it is
+  stretched**, as the Program output already is. Not changed: the view would need to draw at each
+  output's size, which means one view per output shape.
+- the frame was a fixed 6 px whatever the size; it is now 1/180 of the canvas height (6 px at 1080),
+  and the title font 1/36 of it, so 4K and 720p outputs keep the same proportions.
+
+### 2. The input's Layers / MultiView page (the owner's screenshot)
+
+| vMix "Layers" tab (pp. 92–96) | BreadStudio |
+|---|---|
+| Up to 10 layers, numbered 1–10, 10 on top | any number of OBS scene items above the base, top first |
+| Show / Hide per layer, keeping its settings | yes (the tick) |
+| Move / change order, keeping position and crop | Up / Down |
+| **Edit** beside a layer: its position, crop and border | **added**: Edit… opens the layer's X / Y / scale / rotation / crop, live |
+| Positions dragged in the preview box (Shift to resize); Layer Designer with Move / Crop / Border modes, alignment lines, Undo/Redo, Lock | dragged in OBS's Preview pane; no designer |
+| Templates: Add saves the position, border and crop of all 10 layers as a template; Remove deletes one; the list is drawn as diagrams (the screenshot) | none |
+| Import / Export the position, border and crop of all 10 layers to a file | none |
+| Border per layer (on/off, thickness, radius) | none — OBS scene items have no border |
+| Values are resolution-independent (zoom 1 = 100 %, pan 0 = centred) | OBS pixels and scale factors |
+
+### Owner decisions left open
+
+1. Layouts beyond + 8 (+ 14, + 2, Show Inputs Only): wanted, and is the choice per output or one for all?
+2. "Program" or vMix's "Output" as the MultiView heading.
+3. Audio meters on the MultiView boxes, and the Output's meter source.
+4. Layer templates: the built-in set (the screenshot's diagrams) and where saved ones live — in the
+   Project (`.bstd`) or beside it, as vMix keeps them outside presets.
+5. Import / Export format: vMix's own layout file (so a vMix template opens here), or the desk's.
+6. Layer borders: an OBS filter per layer (thickness and colour; radius needs a shader), or leave out.

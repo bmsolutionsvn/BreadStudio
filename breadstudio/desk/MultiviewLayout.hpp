@@ -4,10 +4,10 @@
 
 namespace desk {
 
-/* Preview and Program across the top half, the eight inputs along the bottom in two rows of
- * four (vMix's default is one row of eight; two-by-four gives each box the frame's own shape,
- * so a picture of that shape fills it). Slot 0 is Preview, slot 1 is Program, slots 2 to 9 are
- * the inputs, read left to right and top row first. */
+/* vMix's "Preview / Output + 8 Inputs": Preview and Program across the top half, the eight
+ * inputs along the bottom in two rows of four, so each box has the frame's own shape and a
+ * picture of that shape fills it. Slot 0 is Preview, slot 1 is Program, slots 2 to 9 are the
+ * inputs, read left to right and top row first. */
 inline constexpr int MultiviewSlots = 10;
 
 struct SlotRect {

@@ -15,6 +15,7 @@
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -310,15 +311,10 @@ void scalePastBounds(OBSSceneItem item, const struct vec2 &scale)
 	obs_sceneitem_set_scale(item, &scale);
 }
 
-/* Position is the base's own scene item — the transform OBS's own window edits (spec §3.1). Only
- * the bottom item, the base, is read and written, so the input's layers are left alone. */
-QWidget *makePosition(obs_source_t *input)
+/* one scene item's transform — position, scale, rotation and crop, the controls OBS's own transform
+ * window has — changed live as the operator edits it */
+QWidget *makeTransform(OBSSceneItem item)
 {
-	OBSSceneItem item = baseItem(input);
-	if (!item) {
-		return nullptr;
-	}
-
 	auto *page = new QWidget();
 	auto *form = new QFormLayout(page);
 
@@ -381,6 +377,14 @@ QWidget *makePosition(obs_source_t *input)
 	});
 
 	return page;
+}
+
+/* Position is the base's own scene item (spec §3.1). Only the bottom item, the base, is read and
+ * written, so the input's layers are left alone. */
+QWidget *makePosition(obs_source_t *input)
+{
+	OBSSceneItem item = baseItem(input);
+	return item ? makeTransform(item) : nullptr;
 }
 
 /* A colour page (spec §3.1): one OBS filter on the base, added when the operator applies it and
@@ -634,6 +638,10 @@ public:
 		buttons->addWidget(down);
 		undo = new QPushButton(text("Settings.Undo"), this);
 		buttons->addWidget(undo);
+		/* vMix's Edit beside a layer: the layer's position, size and crop as numbers (owner's
+		 * backlog B5), in its own window so the Preview pane stays free for dragging */
+		auto *edit = new QPushButton(text("Settings.EditLayer"), this);
+		buttons->addWidget(edit);
 		buttons->addStretch(1);
 		undo->setEnabled(false);
 
@@ -659,6 +667,23 @@ public:
 		QObject::connect(undo, &QPushButton::clicked, this, [this] {
 			restoreLayer(input, removed);
 			refresh();
+		});
+		QObject::connect(edit, &QPushButton::clicked, this, [this] {
+			obs_sceneitem_t *item = obs_scene_find_sceneitem_by_id(obs_scene_from_source(input), selected());
+			if (!item) {
+				return;
+			}
+			auto *window = new QDialog(this);
+			window->setAttribute(Qt::WA_DeleteOnClose);
+			window->setWindowTitle(
+				text("Settings.EditLayer.Title")
+					.arg(QString::fromUtf8(obs_source_get_name(obs_sceneitem_get_source(item)))));
+			auto *layout = new QVBoxLayout(window);
+			layout->addWidget(makeTransform(OBSSceneItem(item)));
+			/* the item may be removed while the window is open: it is held, so nothing dangles,
+			 * and closing it is enough */
+			QObject::connect(window, &QDialog::finished, this, [this] { refresh(); });
+			window->show();
 		});
 		QObject::connect(up, &QPushButton::clicked, this, [this] {
 			moveLayer(input, selected(), true);
@@ -687,14 +712,10 @@ private:
 		return item ? item->data(Qt::UserRole).toLongLong() : (int64_t)-1;
 	}
 
-	/* the frame the view draws round the picture: the input's category, else its tally, as
-	 * the MultiView draws a slot (spec §3.1) */
+	/* the frame the view draws round the picture: the input's tally, else its category, as the
+	 * MultiView draws a slot (spec §3.1; owner's backlog B5) */
 	uint32_t frameColour() const
 	{
-		const uint32_t category = categoryColour(input);
-		if (category) {
-			return category;
-		}
 		OBSSourceAutoRelease program = obs_frontend_get_current_scene();
 		if (program.Get() == input.Get()) {
 			return ProgramColor;
@@ -705,7 +726,8 @@ private:
 				return PreviewColor;
 			}
 		}
-		return IdleColor;
+		const uint32_t category = categoryColour(input);
+		return category ? category : IdleColor;
 	}
 
 	void refresh()

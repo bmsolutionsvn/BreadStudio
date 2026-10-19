@@ -178,7 +178,12 @@ Tasks 4 to 6.
    Program across the top and the inputs below, each with its number, name
    and a frame that matches the input bar's — red on Program, green on
    Preview, idle otherwise; with Studio Mode off the Preview box shows
-   Program and nothing is green. Changing Program, Preview or the input list
+   Program and nothing is green. The Program box is framed red and the
+   Preview box green (idle with Studio Mode off). Each title sits in a strip
+   under its picture, never over it, and an input with a category tag on
+   Program or Preview is still red or green (the tag shows only while it is
+   idle). At 3840×2160 and at 1280×720 the frames are the same share of the
+   box. Changing Program, Preview or the input list
    is reflected within a second; changing the size restarts only its own
    receivers.
 10. Output 2 set to NDI, and a second PC running NDI Studio Monitor or vMix:
@@ -222,7 +227,11 @@ shown — OBS has no such source property.
    changes live.
 5. Position moves the base within its own input (X/Y/scale/rotation/crop); Layers
    / MultiView lists the layers with hidden/shown, up/down and remove, and its
-   small live view follows what the MultiView draws.
+   small live view follows what the MultiView draws (red or green while the input
+   is on air, whatever its category). **Edit…** on a selected layer opens
+   `Layer: <name>` with the same X/Y/scale/rotation/crop as Position, for that
+   layer only; each change shows live in Preview, and dragging the layer in Preview
+   then reopening Edit shows the new numbers.
 6. A trigger (on Program → Start recording) fires when the input becomes Program,
    and does not fire on starting OBS or loading a collection.
 7. `Copy From…` copies the desk settings (AFV, category, mouse-click action, the
