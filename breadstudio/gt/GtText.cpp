@@ -217,7 +217,11 @@ bool gtDrawText(ID2D1DeviceContext *context, IDWriteFactory *dwrite, ID2D1Factor
 								      : DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
 	format->SetWordWrapping(object.singleLine ? DWRITE_WORD_WRAPPING_NO_WRAP : DWRITE_WORD_WRAPPING_WRAP);
 	if (lineSpacing > 0) {
-		format->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, lineSpacing, lineSpacing);
+		/* vMix 29 chooses the method: proportional normally, uniform only above 2 (vMix 26 was
+		 * always proportional - see D2DEngine.D2D1Text in both builds). BreadStudio follows v29. */
+		const DWRITE_LINE_SPACING_METHOD method = lineSpacing > 2.0f ? DWRITE_LINE_SPACING_METHOD_UNIFORM
+									   : DWRITE_LINE_SPACING_METHOD_PROPORTIONAL;
+		format->SetLineSpacing(method, lineSpacing, lineSpacing);
 	}
 
 	std::wstring wideText = toWide(text);
