@@ -8,12 +8,11 @@
 # vMix's output must be 1920x1080 (the render test compares at that size). Each
 # .gtzip under -Source becomes one PNG under -Out with the same relative path.
 #
-# --- Whether vMix's SnapshotInput PNG carries alpha: NOT yet confirmed. ---
-# When this script was written, vMix's API did not answer on this machine, so
-# no snapshot was taken and the alpha question is open. GtRenderTest.cpp
-# composites a reference that has no alpha over black, so an opaque snapshot is
-# handled; if vMix writes alpha, read GtRenderTest.cpp's composite step before
-# trusting a diff.
+# --- vMix's SnapshotInput PNG carries alpha: CONFIRMED 2026-10-19. ---
+# A snapshot is 1920x1080 32bppArgb with a transparent corner, i.e. straight
+# alpha over nothing, which is what the render test's own readback produces, so
+# the two are compared like for like. (GtRenderTest.cpp composites a reference
+# that has no alpha over black; it does not take that path here.)
 #
 # Expected on the owner's PC: 25 PNGs (design section 9).
 param(
@@ -29,33 +28,36 @@ function Get-VmixXml {
     return (Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri $Api).Content
 }
 
-# vMix numbers its inputs; the numbers present now, so a new one can be picked
-# out after AddInput. The attribute is "number" in vMix's /api/ XML.
-function Get-InputNumbers([string] $Xml) {
-    $numbers = @()
-    foreach ($m in [regex]::Matches($Xml, '<input\b[^>]*\bnumber="(\d+)"')) {
-        $numbers += [int] $m.Groups[1].Value
+# vMix renumbers its inputs, so a new one is picked out by its unique "key", not
+# by its number. Both attributes are in vMix's /api/ XML.
+function Get-InputKeys([string] $Xml) {
+    $keys = @()
+    foreach ($m in [regex]::Matches($Xml, '<input\b[^>]*\bkey="([^"]+)"')) {
+        $keys += $m.Groups[1].Value
     }
-    return $numbers
+    return $keys
 }
 
+# Everything the function needs travels in the query string, so the value -- a
+# Windows path, often with spaces -- is percent-encoded. vMix decodes it.
 function Add-GtInput([string] $path) {
-    $before = Get-InputNumbers (Get-VmixXml)
+    $before = Get-InputKeys (Get-VmixXml)
     foreach ($type in @('GT', 'Title')) {
-        $url = $Api + '?Function=AddInput&Value=' + $type + '|' + $path
+        $value = [uri]::EscapeDataString($type + '|' + $path)
+        $url = $Api + '?Function=AddInput&Value=' + $value
         Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri $url | Out-Null
-        $after = Get-InputNumbers (Get-VmixXml)
-        $new = @($after | Where-Object { $before -notcontains $_ })
+        $keys = Get-InputKeys (Get-VmixXml)
+        $new = @($keys | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 1) {
-            Write-Host "  added as '$type' input $($new[0])"
+            Write-Host "  added as '$type' input key $($new[0])"
             return $new[0]
         }
     }
     throw "vMix did not add $path as either 'GT' or 'Title'"
 }
 
-function Remove-VmixInput([int] $number) {
-    Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri ($Api + '?Function=RemoveInput&Input=' + $number) | Out-Null
+function Remove-VmixInput([string] $key) {
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri ($Api + '?Function=RemoveInput&Input=' + [uri]::EscapeDataString($key)) | Out-Null
 }
 
 # Fail early and clearly when vMix is not there, rather than writing nothing.
@@ -86,13 +88,14 @@ foreach ($file in $files) {
     }
     [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($dest)) | Out-Null
     Write-Host "render: $relative"
-    $number = Add-GtInput $file.FullName
+    $input = Add-GtInput $file.FullName
     try {
-        $url = $Api + '?Function=SnapshotInput&Input=' + $number + '&Value=' + $dest
+        $url = $Api + '?Function=SnapshotInput&Input=' + [uri]::EscapeDataString($input) +
+               '&Value=' + [uri]::EscapeDataString($dest)
         Invoke-WebRequest -UseBasicParsing -TimeoutSec 30 -Uri $url | Out-Null
         $made++
     } finally {
-        Remove-VmixInput $number
+        Remove-VmixInput $input
     }
 }
 
