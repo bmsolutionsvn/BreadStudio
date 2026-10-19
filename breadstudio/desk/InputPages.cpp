@@ -5,6 +5,7 @@
 #include "InputModel.hpp"
 #include "InputSelect.hpp"
 #include "TileDisplay.hpp"
+#include "TitleTab.hpp"
 
 #include <obs-frontend-api.h>
 #include <properties-view.hpp>
@@ -885,12 +886,18 @@ QWidget *makeAdvanced(obs_source_t *input)
 
 } // namespace
 
-std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *)
+std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *window)
 {
 	std::vector<InputSettingPage> pages;
 
 	if (QWidget *general = makeGeneral(input)) {
 		pages.push_back({text("Settings.Page.General"), general});
+	}
+
+	/* a GT title's fields, their style and their countdown, right after General (gt-title design
+	 * §4.4); null, and so absent, for every other kind of input */
+	if (QWidget *title = makeTitleTab(input, window)) {
+		pages.push_back({text("Settings.Page.Title"), title});
 	}
 
 	if (QWidget *audio = makeAudio(input)) {

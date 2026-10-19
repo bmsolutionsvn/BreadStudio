@@ -107,6 +107,8 @@ target_sources(
     TileDisplay.hpp
     TitlePage.cpp
     TitlePage.hpp
+    TitleTab.cpp
+    TitleTab.hpp
     VmixBuild.cpp
     VmixPreset.cpp
     VmixPreset.hpp
