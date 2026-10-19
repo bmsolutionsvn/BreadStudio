@@ -371,9 +371,20 @@ void drawText(GtRendererImpl &impl, DrawContext &ctx, const GtObject &object)
 	}
 	ComPtr<ID2D1Brush> fill = makeBrush(impl, object.fill, fillOverride, hasOverride, object.width, object.height);
 	ComPtr<ID2D1Brush> stroke = makeBrush(impl, object.stroke, 0, false, object.width, object.height);
+	/* vMix cuts a TextBlock's text at its box's top and bottom edges (plan Finding 4): text that
+	 * wraps past Dimensions must not paint over its neighbours. The context is in the object's
+	 * space here, so the box is (0,0) to its size. */
+	const float clipWidth = object.width > 0 ? object.width : 1.0f;
+	const float clipHeight = object.height > 0 ? object.height : 1.0f;
+	/* ponytail: an axis-aligned clip uses the transformed box's bounds under Skew, not the skewed
+	 * box itself; a geometry layer is the upgrade if a skewed overflowing title ever appears. */
+	impl.context->PushAxisAlignedClip(D2D1::RectF(0, 0, clipWidth, clipHeight),
+					  D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 	std::string missingFamily;
-	if (!gtDrawText(impl.context.Get(), impl.dwrite.Get(), impl.d2dFactory.Get(), object, style, text, fill.Get(),
-			stroke.Get(), missingFamily)) {
+	const bool drawn = gtDrawText(impl.context.Get(), impl.dwrite.Get(), impl.d2dFactory.Get(), object, style, text,
+				      fill.Get(), stroke.Get(), missingFamily);
+	impl.context->PopAxisAlignedClip();
+	if (!drawn) {
 		ctx.fontFamilies[missingFamily].push_back(field.empty() ? object.name : field);
 	}
 }
@@ -450,7 +461,14 @@ void drawShadow(GtRendererImpl &impl, DrawContext &ctx, const GtObject &object, 
 	effect->SetInput(0, list);
 	ComPtr<ID2D1Image> output;
 	effect->GetOutput(&output);
-	impl.context->SetTransform(D2D1::Matrix3x2F::Translation(shadow.offsetX, shadow.offsetY) * matrix);
+	/* The list already holds world-space drawing, so move it by the offset in the object's own
+	 * space: inverse(matrix) * Translation(offset) * matrix (row-vector order, left applied first). */
+	D2D1_MATRIX_3X2_F moved = D2D1::Matrix3x2F::Translation(shadow.offsetX, shadow.offsetY);
+	D2D1::Matrix3x2F inverse(matrix.m11, matrix.m12, matrix.m21, matrix.m22, matrix.dx, matrix.dy);
+	if (inverse.Invert()) {
+		moved = inverse * moved * matrix;
+	}
+	impl.context->SetTransform(moved);
 	impl.context->DrawImage(output.Get());
 	impl.context->SetTransform(matrix);
 }
@@ -511,6 +529,12 @@ void drawComposition(GtRendererImpl &impl, DrawContext &ctx, const std::vector<G
 void collectReferencedResources(const std::vector<GtObject> &objects, std::vector<std::string> &names)
 {
 	for (const GtObject &object : objects) {
+		/* An invisible object is not drawn, so a picture it names is not missing: titles keep
+		 * references to layout-preview art that was stripped from the package (MAN OF THE MATCH's is
+		 * Visible="False"). Warning about those would tell an operator a good title is broken. */
+		if (!object.visible) {
+			continue;
+		}
 		if (object.kind == "Image" && !object.bitmapSource.empty()) {
 			if (std::find(names.begin(), names.end(), object.bitmapSource) == names.end()) {
 				names.push_back(object.bitmapSource);
