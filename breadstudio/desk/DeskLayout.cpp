@@ -401,6 +401,7 @@ static void importVmixPreset(QWidget *parent)
 	/* the preset built into it through the desk's own InputModel. The desk's bar scrolls
 	 * and holds every input (S1 §3), so it has no limit to pass: 0 means no bar, and V5's
 	 * over-limit split has nothing to trim here. */
+	result.presetDir = QFileInfo(path).absolutePath().toStdString();
 	buildVmixPreset(result, 0);
 
 	/* §5.2's stream, output and recording settings are carried by nobody: the reader

@@ -37,7 +37,7 @@ One unit, `VmixPreset`, in two halves on purpose (spec §5.4):
 | NDI | the desk's NDI input | the NDI source name is carried |
 | Browser, Web Browser | a browser source | only if OBS's browser plugin is built in; else reported |
 | Desktop Capture, Screen | a display or window capture | a window that has gone is reported |
-| Title, GT Title | the imported title, drawn as it was (S7) | text, colours, images, static layout drawn; animation, data binding and anything that changes on air reported |
+| Title, GT Title | a GT title input (`.gtzip`); an `.xaml` title, the imported text source | GT title: its values carried; its animation, overlay channel and data links reported. `.xaml` titles are unchanged |
 | Audio input | an audio capture device | matched by name, as a camera is |
 | Video Delay, Virtual Set, PowerPoint, Stream, Video Call, Mix, Photos, Replay | nothing | no desk equivalent; reported |
 | input number | the input's order in the bar | number is position |
