@@ -81,6 +81,20 @@ LayerGraph graph();
  * "dshow_input". Null when the type does not exist on this machine. */
 OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *settings);
 
+/* vMix's Change (owner's backlog B4). While one is alive, createInput makes no new input: it
+ * makes only the base and puts it into `input` in place of the old one, and returns `input`.
+ * Every Input Select page makes its input through createInput, so each of them can change an
+ * existing input's source this way. The new base takes the old one's place in the list, its
+ * position and crop, its audio settings and its filters; the input keeps its name, layers and
+ * desk settings. */
+class BaseReplacement {
+public:
+	explicit BaseReplacement(obs_source_t *input);
+	~BaseReplacement();
+	BaseReplacement(const BaseReplacement &) = delete;
+	BaseReplacement &operator=(const BaseReplacement &) = delete;
+};
+
 /* false when the name is empty or already used by any source */
 bool renameInput(obs_source_t *input, const char *name);
 

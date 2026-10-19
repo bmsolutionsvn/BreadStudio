@@ -159,9 +159,15 @@ const Kind kinds[] = {
 
 } // namespace
 
-InputSelect::InputSelect(QWidget *parent) : QDialog(parent), pageOf(std::size(kinds), nullptr)
+InputSelect::InputSelect(QWidget *parent) : InputSelect(nullptr, parent) {}
+
+InputSelect::InputSelect(obs_source_t *input, QWidget *parent)
+	: QDialog(parent),
+	  existing(input),
+	  pageOf(std::size(kinds), nullptr)
 {
-	setWindowTitle(text("InputSelect.Title"));
+	setWindowTitle(existing ? text("InputSelect.ChangeTitle").arg(QString::fromUtf8(obs_source_get_name(existing)))
+				: text("InputSelect.Title"));
 	resize(1000, 620);
 
 	auto *outer = new QVBoxLayout(this);
@@ -174,6 +180,26 @@ InputSelect::InputSelect(QWidget *parent) : QDialog(parent), pageOf(std::size(ki
 
 	pages = new QStackedWidget(this);
 	body->addWidget(pages, 1);
+
+	/* An input that exists has its own source first, edited in place: OK keeps the change and
+	 * Cancel puts it back. Every other row makes a new source in place of it (vMix's Change,
+	 * owner's backlog B4). */
+	if (existing) {
+		OBSSource base = baseSource(existing);
+		if (StreamPage::isStream(base)) {
+			own = new StreamPage(base.Get(), pages);
+		} else if (base && std::strcmp(obs_source_get_unversioned_id(base), NdiTab::TypeId) == 0) {
+			own = new NdiTab(base.Get(), pages);
+		} else if (base && std::strcmp(obs_source_get_unversioned_id(base), OmtTab::TypeId) == 0) {
+			own = new OmtTab(base.Get(), pages);
+		} else {
+			own = new PropertiesPage(base.Get(), pages);
+		}
+		pages->addWidget(own);
+		connect(own, &InputPage::readyChanged, this, &InputSelect::syncOk);
+		auto *item = new QListWidgetItem(text("InputSelect.ThisSource"), list);
+		item->setData(Qt::UserRole, -1);
+	}
 
 	/* The list is filled here, not when the plugin loads: by now every plugin has
 	 * registered its source types. */
@@ -189,33 +215,6 @@ InputSelect::InputSelect(QWidget *parent) : QDialog(parent), pageOf(std::size(ki
 
 	connect(list, &QListWidget::currentRowChanged, this, [this](int) { showKind(); });
 	list->setCurrentRow(0);
-}
-
-InputSelect::InputSelect(obs_source_t *input, QWidget *parent) : QDialog(parent), existing(input)
-{
-	setWindowTitle(text("Settings.Title").arg(QString::fromUtf8(obs_source_get_name(existing))));
-	resize(760, 620);
-
-	auto *outer = new QVBoxLayout(this);
-	pages = new QStackedWidget(this);
-	outer->addWidget(pages, 1);
-
-	OBSSource base = baseSource(existing);
-	InputPage *only = nullptr;
-	if (StreamPage::isStream(base)) {
-		only = new StreamPage(base.Get(), pages);
-	} else if (base && std::strcmp(obs_source_get_unversioned_id(base), NdiTab::TypeId) == 0) {
-		only = new NdiTab(base.Get(), pages);
-	} else if (base && std::strcmp(obs_source_get_unversioned_id(base), OmtTab::TypeId) == 0) {
-		only = new OmtTab(base.Get(), pages);
-	} else {
-		only = new PropertiesPage(base.Get(), pages);
-	}
-	pages->addWidget(only);
-	connect(only, &InputPage::readyChanged, this, &InputSelect::syncOk);
-
-	addButtons(outer);
-	syncOk();
 }
 
 void InputSelect::addButtons(QVBoxLayout *outer)
@@ -236,7 +235,14 @@ void InputSelect::showKind()
 		return;
 	}
 
-	const size_t kind = (size_t)item->data(Qt::UserRole).toInt();
+	const int row = item->data(Qt::UserRole).toInt();
+	if (row < 0) {
+		pages->setCurrentWidget(own);
+		syncOk();
+		return;
+	}
+
+	const size_t kind = (size_t)row;
 	if (!pageOf[kind]) {
 		pageOf[kind] = kinds[kind].make(pages);
 		pages->addWidget(pageOf[kind]);
@@ -264,29 +270,36 @@ void InputSelect::accept()
 		return;
 	}
 
-	if (existing) {
-		current->apply();
+	if (current == own) {
+		own->apply();
 		markProjectChanged();
 		QDialog::accept();
 		return;
 	}
 
-	OBSSource made = current->create();
+	/* another kind for an input that exists: the page makes only a base, which replaces the old one */
+	OBSSource made;
+	if (existing) {
+		BaseReplacement replacing(existing);
+		made = current->create();
+	} else {
+		made = current->create();
+	}
 	if (!made) {
 		QMessageBox::warning(this, windowTitle(), text("InputSelect.Failed"));
 		return;
 	}
 
-	emit inputMade(made);
+	if (!existing) {
+		emit inputMade(made);
+	}
 	QDialog::accept();
 }
 
 void InputSelect::reject()
 {
-	if (existing) {
-		if (InputPage *current = page()) {
-			current->revert();
-		}
+	if (own) {
+		own->revert();
 	}
 	QDialog::reject();
 }

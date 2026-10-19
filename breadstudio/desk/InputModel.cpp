@@ -409,11 +409,94 @@ static std::string uniqueName(const std::string &wanted)
 	}
 }
 
+/* the fixed shape: the base fills the canvas and is locked (spec §3) */
+static void fitBase(obs_sceneitem_t *item, obs_source_t *base)
+{
+	if (obs_source_get_output_flags(base) & OBS_SOURCE_VIDEO) {
+		obs_video_info ovi = {};
+		obs_get_video_info(&ovi);
+		struct vec2 bounds;
+		vec2_set(&bounds, (float)ovi.base_width, (float)ovi.base_height);
+		obs_sceneitem_set_bounds_type(item, OBS_BOUNDS_SCALE_INNER);
+		obs_sceneitem_set_bounds(item, &bounds);
+	}
+	obs_sceneitem_set_locked(item, true);
+}
+
+/* the input a live BaseReplacement points createInput at; null otherwise. Input Select runs on
+ * the UI thread only, so one slot is enough. */
+static obs_source_t *replacing = nullptr;
+
+BaseReplacement::BaseReplacement(obs_source_t *input)
+{
+	replacing = input;
+}
+
+BaseReplacement::~BaseReplacement()
+{
+	replacing = nullptr;
+}
+
+/* puts `base` into `input` where the old base was. The old base goes only once the new one is in,
+ * so a failure leaves the input as it was. */
+static bool replaceBase(obs_source_t *input, obs_source_t *base)
+{
+	OBSSceneItem old = baseItem(input);
+	if (!old) {
+		return false;
+	}
+	obs_source_t *was = obs_sceneitem_get_source(old);
+
+	/* the old base's audio: the mixer's fader, sends and ♪ read these, and AFV drives the mute */
+	obs_source_set_volume(base, obs_source_get_volume(was));
+	obs_source_set_muted(base, obs_source_muted(was));
+	obs_source_set_balance_value(base, obs_source_get_balance_value(was));
+	obs_source_set_sync_offset(base, obs_source_get_sync_offset(was));
+	obs_source_set_monitoring_type(base, obs_source_get_monitoring_type(was));
+	obs_source_set_audio_mixers(base, obs_source_get_audio_mixers(was));
+	obs_source_set_flags(base, obs_source_get_flags(was)); /* force mono */
+	obs_source_copy_filters(base, was);
+
+	obs_sceneitem_t *item = obs_scene_add(obs_scene_from_source(input), base);
+	if (!item) {
+		return false;
+	}
+
+	/* the operator's Position page edits the base's item, so the new one takes the old one's
+	 * geometry; an audio-only base had no bounds to keep, and a video one then fills the canvas */
+	struct obs_transform_info info = {};
+	struct obs_sceneitem_crop crop = {};
+	obs_sceneitem_get_info2(old, &info);
+	obs_sceneitem_get_crop(old, &crop);
+	obs_sceneitem_set_info2(item, &info);
+	obs_sceneitem_set_crop(item, &crop);
+	if (info.bounds_type == OBS_BOUNDS_NONE) {
+		fitBase(item, base);
+	}
+	obs_sceneitem_set_locked(item, true);
+	obs_sceneitem_set_visible(item, obs_sceneitem_visible(old));
+	obs_sceneitem_set_order_position(item, 0);
+
+	obs_sceneitem_remove(old);
+	bed().sync(); /* AFV and the audio bed follow the new base */
+	markProjectChanged();
+	return true;
+}
+
 OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *settings)
 {
 	const char *id = obs_get_latest_input_type_id(unversionedId);
 	if (!id) {
 		return OBSSource();
+	}
+
+	if (replacing) {
+		const std::string baseName = uniqueName(std::string(obs_source_get_name(replacing)) + " source");
+		OBSSourceAutoRelease base = obs_source_create(id, baseName.c_str(), settings, nullptr);
+		if (!base || !replaceBase(replacing, base)) {
+			return OBSSource();
+		}
+		return OBSSource(replacing);
 	}
 
 	const std::string sceneName = uniqueName(name);
@@ -427,17 +510,7 @@ OBSSource createInput(const char *unversionedId, const char *name, obs_data_t *s
 	/* OBS's main window adds the scene to its list as soon as it exists */
 	OBSSceneAutoRelease scene = obs_scene_create(sceneName.c_str());
 	obs_sceneitem_t *item = obs_scene_add(scene, base);
-
-	/* the fixed shape: the base fills the canvas and is locked (spec §3) */
-	if (obs_source_get_output_flags(base) & OBS_SOURCE_VIDEO) {
-		obs_video_info ovi = {};
-		obs_get_video_info(&ovi);
-		struct vec2 bounds;
-		vec2_set(&bounds, (float)ovi.base_width, (float)ovi.base_height);
-		obs_sceneitem_set_bounds_type(item, OBS_BOUNDS_SCALE_INNER);
-		obs_sceneitem_set_bounds(item, &bounds);
-	}
-	obs_sceneitem_set_locked(item, true);
+	fitBase(item, base);
 
 	OBSSource input = obs_scene_get_source(scene);
 

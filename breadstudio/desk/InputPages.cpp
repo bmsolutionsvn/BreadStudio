@@ -28,6 +28,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <string>
 #include <utility>
@@ -152,9 +153,9 @@ QWidget *makeGeneral(obs_source_t *input)
 	});
 	form->addRow(text("Settings.Name"), name);
 
-	/* the base this input shows, and vMix's Change: opens the desk's picker for the base's kind,
-	 * which points the input at another source while its name, layers, levels and AFV stay as
-	 * they are (owner's backlog B4). InputSelect's ctor for an existing input does the work. */
+	/* the base this input shows, and vMix's Change: the desk's picker with the base itself first,
+	 * edited in place, and every kind, any of which puts a new source in place of the base while
+	 * the input's name, layers, levels and AFV stay as they are (owner's backlog B4) */
 	auto *source = new QWidget(page);
 	auto *sourceRow = new QHBoxLayout(source);
 	sourceRow->setContentsMargins(0, 0, 0, 0);
@@ -242,12 +243,6 @@ QWidget *makeGeneral(obs_source_t *input)
 
 	form->addRow(text("Settings.Resolution"), new QLabel(resolutionText(base), page));
 	form->addRow(text("Settings.FrameRate"), new QLabel(frameRateText(), page));
-
-	/* OBS's own source-properties panel for the base: its Advanced Audio is not reachable from a
-	 * plugin, so the button opens the base's own properties, and says so */
-	auto *audio = new QPushButton(text("Settings.SourceProperties"), page);
-	QObject::connect(audio, &QPushButton::clicked, page, [base] { obs_frontend_open_source_properties(base); });
-	outer->addWidget(audio);
 
 	outer->addStretch(1);
 	return page;
@@ -788,8 +783,58 @@ QWidget *makeTriggers(obs_source_t *input)
 	return page;
 }
 
+/* Audio: what OBS's Advanced Audio Properties has and the mixer strip does not — balance, sync
+ * offset and mono. The fader, mute, monitoring and sends stay on the strip, so nothing is
+ * offered twice. OBS's own window is not reachable from a plugin (owner's backlog B4), so these
+ * are the base's own audio settings through libobs. Null for a base with no audio. */
+QWidget *makeAudio(obs_source_t *input)
+{
+	OBSSource base = baseSource(input);
+	if (!hasAudio(base)) {
+		return nullptr;
+	}
+
+	auto *page = new QWidget();
+	auto *outer = new QVBoxLayout(page);
+	auto *form = new QFormLayout();
+	outer->addLayout(form);
+
+	/* OBS's balance runs 0 (left) to 1 (right), 0.5 centred; shown as -100 to 100 */
+	auto *balance = new QSpinBox(page);
+	balance->setRange(-100, 100);
+	balance->setValue((int)std::lround(obs_source_get_balance_value(base) * 200.0f - 100.0f));
+	QObject::connect(balance, &QSpinBox::valueChanged, page, [base](int value) {
+		obs_source_set_balance_value(base, (float)(value + 100) / 200.0f);
+		markProjectChanged();
+	});
+	form->addRow(text("Settings.Audio.Balance"), balance);
+
+	/* the same range OBS's window offers, in milliseconds; libobs keeps nanoseconds */
+	auto *sync = new QSpinBox(page);
+	sync->setRange(-950, 20000);
+	sync->setSuffix(QStringLiteral(" ms"));
+	sync->setValue((int)(obs_source_get_sync_offset(base) / 1000000));
+	QObject::connect(sync, &QSpinBox::valueChanged, page, [base](int ms) {
+		obs_source_set_sync_offset(base, (int64_t)ms * 1000000);
+		markProjectChanged();
+	});
+	form->addRow(text("Settings.Audio.Sync"), sync);
+
+	auto *mono = new QCheckBox(text("Settings.Audio.Mono"), page);
+	mono->setChecked((obs_source_get_flags(base) & OBS_SOURCE_FLAG_FORCE_MONO) != 0);
+	QObject::connect(mono, &QCheckBox::toggled, page, [base](bool on) {
+		const uint32_t flags = obs_source_get_flags(base);
+		obs_source_set_flags(base, on ? flags | OBS_SOURCE_FLAG_FORCE_MONO : flags & ~OBS_SOURCE_FLAG_FORCE_MONO);
+		markProjectChanged();
+	});
+	form->addRow(mono);
+
+	outer->addStretch(1);
+	return page;
+}
+
 /* Advanced (spec §3.1): the base's own OBS properties — the same panel OBS's source properties
- * shows, so sync offset and hotkeys are here — and a line naming the vMix features BreadStudio
+ * shows — and a line naming the vMix features BreadStudio
  * does not offer, so the absence is explained (design §3.1). */
 QWidget *makeAdvanced(obs_source_t *input)
 {
@@ -824,6 +869,10 @@ std::vector<InputSettingPage> pagesFor(obs_source_t *input, InputSettings *)
 
 	if (QWidget *general = makeGeneral(input)) {
 		pages.push_back({text("Settings.Page.General"), general});
+	}
+
+	if (QWidget *audio = makeAudio(input)) {
+		pages.push_back({text("Settings.Page.Audio"), audio});
 	}
 
 	/* the base's own scene item, where the input has one (spec §3.1) */

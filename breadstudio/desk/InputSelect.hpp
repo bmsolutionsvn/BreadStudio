@@ -23,7 +23,9 @@ public:
 	/* the whole window, to make a new input */
 	explicit InputSelect(QWidget *parent);
 
-	/* one page and no list, for the base of an input that exists */
+	/* the whole window, to change the source of an input that exists (vMix's Change): its own
+	 * source first, edited in place, then every kind, whose OK puts a new source in place of the
+	 * old base (BaseReplacement) */
 	InputSelect(obs_source_t *input, QWidget *parent);
 
 	/* the input this window is for; null when it makes a new one */
@@ -42,6 +44,7 @@ private:
 	InputPage *page() const;
 
 	OBSSource existing;
+	InputPage *own = nullptr; /* the existing input's own source, edited in place */
 	QListWidget *list = nullptr;
 	QStackedWidget *pages = nullptr;
 	QPushButton *ok = nullptr;

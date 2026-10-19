@@ -197,13 +197,22 @@ Spec: `2026-10-16-breadstudio-input-settings-design.md`. Aspect Ratio is never
 shown — OBS has no such source property.
 
 1. In an input's settings, the General page's Source row shows the input's source, and
-   its **Change…** opens the desk's picker for that kind; changing it there points the
-   input at the other source and the input keeps its name, layers, levels and AFV.
+   its **Change…** opens `Change source: <name>` with **This source** first and selected,
+   then every kind. On This source, a change takes effect live, OK keeps it and Cancel puts
+   it back. On any other kind — a camera input changed to a media file, an NDI input changed
+   to an SRT stream — OK puts that new source in place of the old one: the input keeps its
+   name, its place in the bar, its layers (and every layer of it elsewhere), its Position,
+   its filters, its fader, mute, monitoring, sends, balance, sync offset and AFV, and the old
+   source is gone from the Audio Mixer.
 2. The gear opens a window titled `Input: N <name>` (N the input's place in the
    bar) with the General page shown. The page list is exactly the pages that
    input's type backs: General and Position for every input, each colour/effect
    page whose filter OBS has registered, Layers / MultiView and Triggers for the
-   desk, and Advanced. A page with nothing behind it is not listed.
+   desk, and Advanced; and Audio for a source with sound. A page with nothing behind
+   it is not listed. No button on any page opens one of OBS's own windows.
+2a. Audio: Balance (-100 to 100), Sync offset (ms) and Downmix to mono each change what is
+   heard live and survive a restart; the fader, mute, monitoring and sends are not on the
+   page, they stay on the mixer strip.
 3. Rename, Category, AFV and Mouse Click Action each take effect — the name on
    the tile, the category tint on the tile and the MultiView slot, AFV on the
    mixer strip and the tile, and the click action on what a tile click does — and
