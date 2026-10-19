@@ -529,6 +529,12 @@ void drawComposition(GtRendererImpl &impl, DrawContext &ctx, const std::vector<G
 void collectReferencedResources(const std::vector<GtObject> &objects, std::vector<std::string> &names)
 {
 	for (const GtObject &object : objects) {
+		/* An invisible object is not drawn, so a picture it names is not missing: titles keep
+		 * references to layout-preview art that was stripped from the package (MAN OF THE MATCH's is
+		 * Visible="False"). Warning about those would tell an operator a good title is broken. */
+		if (!object.visible) {
+			continue;
+		}
 		if (object.kind == "Image" && !object.bitmapSource.empty()) {
 			if (std::find(names.begin(), names.end(), object.bitmapSource) == names.end()) {
 				names.push_back(object.bitmapSource);

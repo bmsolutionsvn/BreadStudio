@@ -657,6 +657,50 @@ static void shadowCheck(ID3D11Device *device, ID3D11DeviceContext *context)
 /* Task 3 (Finding 4): vMix cuts a TextBlock's text at its box's top and bottom edges. This text
  * wraps past a 200x30 box; nothing below the box may be painted, and the text inside it must
  * still be drawn. */
+/* A picture that an invisible object names is not missing: the owner's titles keep references to
+ * layout-preview art stripped from the package, and vMix does not draw those objects. */
+static void warningCheck(ID3D11Device *device, ID3D11DeviceContext *context)
+{
+	(void)context;
+	GtDocument document;
+	document.width = 64;
+	document.height = 64;
+
+	GtObject shown;
+	shown.kind = "Image";
+	shown.name = "Shown";
+	shown.width = 64;
+	shown.height = 64;
+	shown.bitmapSource = "gone\\shown.png";
+	document.objects.push_back(shown);
+
+	GtObject hidden;
+	hidden.kind = "Image";
+	hidden.name = "Preview";
+	hidden.width = 64;
+	hidden.height = 64;
+	hidden.visible = false;
+	hidden.bitmapSource = "gone\\preview.png";
+	document.objects.push_back(hidden);
+
+	GtRenderer renderer;
+	std::string error;
+	REQUIRE(renderer.init(device, error));
+	GtPackage package;
+	renderer.load(package, document);
+
+	bool missing = false;
+	for (const GtWarning &warning : renderer.warnings()) {
+		if (warning.kind != "missing-resources") {
+			continue;
+		}
+		missing = true;
+		REQUIRE(warning.detail.find("shown.png") != std::string::npos);
+		REQUIRE(warning.detail.find("preview.png") == std::string::npos);
+	}
+	REQUIRE(missing);
+}
+
 static void clipCheck(ID3D11Device *device, ID3D11DeviceContext *context)
 {
 	const int width = 320, height = 120;
@@ -737,6 +781,7 @@ int main(int argc, char **argv)
 	selfCheck(device.Get(), context.Get());
 	shadowCheck(device.Get(), context.Get());
 	clipCheck(device.Get(), context.Get());
+	warningCheck(device.Get(), context.Get());
 	glyphCheck();
 
 	if (argc < 4) {
