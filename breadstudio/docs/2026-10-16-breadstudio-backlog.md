@@ -4,7 +4,21 @@ Captured from the owner in conversation, with the screenshots they supplied.
 Each row is a change to make. "Where" names the unit the change lands in; each
 group becomes its own plan when it is worked.
 
-Status: **not started.** Plan 1 (hiding OBS's surface) is done and shipped.
+Status: **every item has landed on `main`** (report below, 2026-10-19). Plan 1 (hiding OBS's surface)
+is done and shipped. Nothing here has been run on the desk yet; each row names its DESK-SMOKE check.
+
+## Report — 2026-10-19
+
+| Item | Commit(s) | What landed | Check, and what is open |
+|---|---|---|---|
+| **B1** Remove a layer, with Undo | `b508474b1` | No confirmation; an **Undo** button beside Remove / Up / Down puts the layer back exactly (place, tick, geometry); Up, Down or another remove clears it. Remove only, not Add or the tick. | DESK-SMOKE I.9 |
+| **B2** Close an input that is on air | `a41ae9121` | On Program → it goes to Preview and Program moves to the first other input; Preview follows. Layers of it elsewhere go with it. The last input still cannot be closed. | DESK-SMOKE (delete rows) |
+| **B3** Scene Transitions as a button | `130312782` | The dock is shown by a footer button and can be pinned into the layout; the pin persists. Other desk windows were not given the same button. | — |
+| **B4** Source properties; changing an input's source | `7cc842d65`, `405a0dc4e` | **Change…** opens `Change source: <name>`: **This source** first (edited in place, Cancel reverts), then every kind; any other kind puts a new source in place of the old one, keeping name, bar place, layers, Position, filters, fader, mute, monitoring, sends, balance, sync offset and AFV (vMix: "preserving all settings"). **Source properties…** (it opened OBS's own window) is gone; a new **Audio** page has balance, sync offset and downmix to mono — what OBS's Advanced Audio has and the mixer strip lacks. | DESK-SMOKE I.1, I.2a. Open: replacing a camera with the *same* device may find it busy until the old one closes — use This source for that. |
+| **B5** MultiView after vMix | `051af35de`, `74d9114e0`, `6964ff751` | Review against the vMix User Guide appended to `2026-10-15-breadstudio-multiview.md` (the output MultiView, the input's Layers / MultiView page — the owner's screenshot — and each output's shape). Landed: letterbox, two-by-four, green/red Preview and Program frames, titles in a strip under the picture, **tally wins over a category tag** (a tagged input on air was not red), frame and font scaled to the canvas, and **Edit…** for a layer's X / Y / scale / rotation / crop. | DESK-SMOKE H.9, I.5. Six owner decisions are listed at the end of the review (layouts beyond + 8, Program/Output heading, audio meters, layer templates, Import / Export format, layer borders). A MultiView output at another aspect than the canvas is stretched, as Program is. |
+| **B6** README | `834bfc8f0` | Rewritten for BreadStudio. | — |
+| **B7** Rebuild with the new OMT-HX | `674314546`, `79172d523` | omthx is built from the `OMT-HX` checkout. At OMT-HX `ae96aa1` (plain OMT takes limited-range NV12): `omt-hx`, `bread-omt-test` and `bread-onair-test` build (`build_vs2022`, RelWithDebInfo) and both tests pass (2026-10-19). | Open: the parallel session's `omt-hx.cpp` / `omt-output.cpp` changes (fast premultiply; NV12/UYVY to omthx instead of BGRA) are built and tested above but **not committed** — the owner's call. `bread-onair-test` needs `libobs` and `frontend\api` on PATH to start. |
+| **B8** Title and logo | `f7e8e38b1`, `19fce91aa` | BreadStudio's own title, icon and About. | — |
 
 ---
 
