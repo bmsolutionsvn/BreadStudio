@@ -278,15 +278,31 @@ void drawImage(GtRendererImpl &impl, DrawContext &ctx, const GtObject &object)
 	const float bitmapWidth = (float)bitmap->GetPixelSize().width;
 	const float bitmapHeight = (float)bitmap->GetPixelSize().height;
 	const D2D1_RECT_F src = D2D1::RectF(0, 0, bitmapWidth, bitmapHeight);
-	D2D1_RECT_F dest = D2D1::RectF(0, 0, bitmapWidth, bitmapHeight);
-	if (object.sizeMode == "Stretch") {
-		dest = D2D1::RectF(0, 0, object.width, object.height);
-	} else if (object.sizeMode == "Centered") {
-		const float x = (object.width - bitmapWidth) / 2;
-		const float y = (object.height - bitmapHeight) / 2;
-		dest = D2D1::RectF(x, y, x + bitmapWidth, y + bitmapHeight);
-	} else if (object.sizeMode == "TopRight") {
-		dest = D2D1::RectF(object.width - bitmapWidth, 0, object.width, bitmapHeight);
+	/* vMix scales a picture into the object's rectangle; the object's size is the box, not the
+	 * picture's own pixels. MAN OF THE MATCH's photo is 3460x5189 in a 1312x1271 field, and vMix
+	 * draws it about 848 wide (uniform) rather than 3460, which is what the reference comparison
+	 * against vMix's own snapshots showed. */
+	D2D1_RECT_F dest = D2D1::RectF(0, 0, bitmapWidth, bitmapHeight); /* Normal: its own pixels */
+	if (object.sizeMode != "Normal" && bitmapWidth > 0 && bitmapHeight > 0 && object.width > 0 &&
+	    object.height > 0) {
+		float w = object.width;
+		float h = object.height;
+		if (object.sizeMode != "Stretch") {
+			const float sx = object.width / bitmapWidth;
+			const float sy = object.height / bitmapHeight;
+			const float scale = sx < sy ? sx : sy; /* uniform, so the aspect is kept */
+			w = bitmapWidth * scale;
+			h = bitmapHeight * scale;
+		}
+		float x = 0;
+		float y = 0;
+		if (object.sizeMode == "Centered") {
+			x = (object.width - w) / 2;
+			y = (object.height - h) / 2;
+		} else if (object.sizeMode == "TopRight") {
+			x = object.width - w;
+		}
+		dest = D2D1::RectF(x, y, x + w, y + h);
 	}
 	impl.context->DrawBitmap(bitmap, dest, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, src);
 }
