@@ -298,6 +298,66 @@ Spec: `2026-10-16-breadstudio-cleanup-design.md` §2.2 and §4.
    show) is imported: the inputs, their order, their shots and their audio
    match what vMix showed, and the report names every difference (V6).
 
+## L. GT titles
+
+Spec: `2026-10-19-breadstudio-gt-title-design.md`; §1.2 and Tasks 7 to 11.
+Needs `F:\Stream` (the owner's 25 `.gtzip` files and the EAFC24, CACAS24 and
+FVPL `.vmix` presets); without it, skip this section.
+
+1. Each of the 25 `.gtzip` files under `F:\Stream` opens as an input and, with
+   the values saved in the file, matches vMix's own rendering of the same file —
+   layout, fonts, colours, masks and shadows — with differences no larger than
+   anti-aliasing.
+2. An input's ⚙ → **Title** tab lists every editable field and no others — across
+   the 25 files that is 158 text fields (156 TextBlocks and the two Timer files'
+   Text3D) and 55 picture fields; typing in a text field or choosing a picture
+   shows on Program on the next frame.
+3. `Timer.gtzip` added by itself shows the current time and ticks every second;
+   imported from CACAS24 the same title is a 30:00 countdown in `mm:ss` that
+   Start, Pause, Stop and Reset control.
+4. A field's own font, size, colour and style can be changed in the Title tab,
+   and the ones a preset saved are drawn: EAFC24's `TimeMHC` is cyan, italic,
+   bold Helvetica Neue at 192.
+5. Importing `F:\Stream\EAFC24\EAFC24.vmix` makes every GT input a GT title
+   input showing the values the preset saved: `TagWinLeft` reads "Player Left"
+   and `TagWinRight` reads "Player Right", though the preset names the file
+   `C:\EAFC24\GT\TagWin\TagWin.gtzip`, which is now under `F:\Stream`.
+6. Saving the Project and restarting BreadStudio brings every title back with
+   its values and its styles.
+7. A missing font, a missing `.gtzip` and a missing picture are each named to
+   the operator; none crashes or leaves a blank input without saying why.
+8. With 8 GT title inputs in the Project and 4 of them shown on Program as
+   layers at 1080p60 for ten minutes, OBS's "frames missed due to rendering lag"
+   stays 0.
+9. It draws over Program with soft edges free of dark fringes.
+10. Setting `NameL1.Text` through the source's settings JSON changes it on the
+    next frame.
+11. Re-saving the file in GT Designer updates the input within two seconds.
+12. Setting MAN OF THE MATCH's picture field to its 16 MB PNG leaves OBS's
+    "frames missed due to rendering lag" unchanged.
+13. **Title** is listed after Image in Input Select.
+14. Choosing `Matchup.gtzip` shows its thumbnail and enables OK; OK makes an
+    input named `Matchup` whose tile shows the title.
+15. Choosing `not-a-zip.gtzip` keeps OK greyed and shows the error.
+16. With `bread-gt` removed from the plugins folder, the Title row is absent.
+17. With `Matchup.gtzip`, the Title tab lists 20 text fields and no shapes.
+18. Typing `Nguyễn Văn Á` shows correctly on Program.
+19. Changing a field's size and colour applies them, and Reset restores them.
+20. With `Timer.gtzip`, a countdown set to 00:00:10 counts down and its Start,
+    Pause, Stop and Reset buttons work.
+21. Saving the Project and restarting brings the values and styles back.
+22. In the EAFC24 import, `TagWinLeft` reads "Player Left" and `TagWinRight`
+    reads "Player Right", each with a "found at" row.
+23. In the EAFC24 import, `TimeMHC` is cyan, italic and bold at 192, showing
+    20:00 stopped.
+24. In the EAFC24 import, the report lists the data links and the overlays row.
+25. Importing the CACAS24 and FVPL presets, the FVPL logos are drawn, each with
+    a "found at" row, and CACAS24's Timer shows 30:00, not "27:21".
+26. On a 1280×720 canvas the titles scale to fit, not crop.
+
+Not yet run — the owner runs this section on the production PC and records the
+date, the results and the render test's per-file scores.
+
 ## Before a run
 
 - The build folder must hold no copies of plugin files. OBS loads every DLL in
