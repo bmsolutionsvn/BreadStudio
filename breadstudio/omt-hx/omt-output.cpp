@@ -1,6 +1,7 @@
 /* bread_omt_output: an output's picture and sound sent as plain OMT (VMX) or OMT-HX, on omthx's
- * Sender (outputs spec §4.3). The engine gives it a BGRA canvas and one audio bus, so the picture
- * needs no conversion. Its receiver count is offered through `get_receivers`. */
+ * Sender (outputs spec §4.3). The engine gives it a canvas and one audio bus. A BGRA canvas (alpha)
+ * and a BT.709 NV12 canvas go to omthx as they are; any other canvas is converted to the YUV the
+ * codec takes, never to RGB. Its receiver count is offered through `get_receivers`. */
 
 #include <obs-module.h>
 
@@ -35,15 +36,15 @@ struct OmtOutput {
 	int fpsDen = 1;
 	bool wantAlpha = false; /* the output sends alpha, from the engine's "alpha" setting */
 	bool alpha = false;
-	bool nv12 = false;      /* OMT-HX without alpha: the canvas's NV12 goes to the encoder as it is */
-	bool fullRange = false; /* the NV12 canvas's range */
+	/* what goes to omthx: the BGRA canvas, NV12 (the canvas's, or converted), or UYVY (converted) */
+	enum class Picture { Bgra, Nv12, Uyvy } picture = Picture::Bgra;
+	bool fullRange = false; /* the NV12 picture's range */
 	int sampleRate = 0;
 	size_t channels = 0;
 	std::atomic<bool> started = false;
 
-	video_scaler_t *scaler = nullptr; /* converts the canvas to BGRA when it is not already */
-	std::vector<uint8_t> bgraBuffer;  /* the converted frame */
-	int bgraLinesize = 0;
+	video_scaler_t *scaler = nullptr; /* converts a canvas omthx cannot take as it is */
+	std::vector<uint8_t> converted;   /* the converted frame: NV12 (luma, then chroma) or UYVY */
 };
 
 /* create() adds this to the output's proc handler before its definition below */
@@ -107,13 +108,20 @@ bool omtOutputStart(void *data)
 		/* a BGRA canvas is premultiplied, which is what sendVideo is told; alpha costs a picture of
 		 * double height, so it is coded only when the output sends it */
 		o->alpha = o->wantAlpha && info->format == VIDEO_FORMAT_BGRA;
-		/* BT.709 NV12 (OBS's default, and what OMT-HX codes) needs no conversion for OMT-HX */
 		const bool bt709 = info->colorspace == VIDEO_CS_DEFAULT || info->colorspace == VIDEO_CS_709 ||
 				   info->colorspace == VIDEO_CS_SRGB;
-		o->nv12 = o->mode == omthx::Mode::Hx && info->format == VIDEO_FORMAT_NV12 && bt709;
+		const bool hx = o->mode == omthx::Mode::Hx;
 		o->fullRange = info->range == VIDEO_RANGE_FULL;
-		/* anything else (Output 1 sending VMX, another colour space) is converted to BGRA on the CPU */
-		if (info->format != VIDEO_FORMAT_BGRA && !o->nv12) {
+		/* BT.709 NV12 (OBS's default) goes as it is: to the HX encoder in either range, to VMX in
+		 * limited range, the only one VMX reads. Anything else but BGRA is converted on the CPU to
+		 * the YUV the codec takes (NV12 for HX, UYVY for VMX), which needs no colour matrix. */
+		const bool asIs = info->format == VIDEO_FORMAT_NV12 && bt709 && (hx || !o->fullRange);
+		if (info->format == VIDEO_FORMAT_BGRA) {
+			o->picture = OmtOutput::Picture::Bgra;
+		} else if (asIs) {
+			o->picture = OmtOutput::Picture::Nv12;
+		} else {
+			o->picture = hx ? OmtOutput::Picture::Nv12 : OmtOutput::Picture::Uyvy;
 			video_scale_info src = {};
 			src.format = info->format;
 			src.width = info->width;
@@ -121,14 +129,17 @@ bool omtOutputStart(void *data)
 			src.colorspace = info->colorspace;
 			src.range = info->range;
 			video_scale_info dst = src;
-			dst.format = VIDEO_FORMAT_BGRA;
+			dst.format = hx ? VIDEO_FORMAT_NV12 : VIDEO_FORMAT_UYVY;
+			dst.colorspace = VIDEO_CS_709;
+			dst.range = VIDEO_RANGE_PARTIAL;
+			o->fullRange = false;
 			if (video_scaler_create(&o->scaler, &dst, &src, VIDEO_SCALE_POINT) != VIDEO_SCALER_SUCCESS) {
-				blog(LOG_WARNING, "[bread-omt] output '%s': the canvas cannot be converted to BGRA",
-				     o->name.c_str());
+				blog(LOG_WARNING, "[bread-omt] output '%s': the canvas cannot be converted to %s",
+				     o->name.c_str(), hx ? "NV12" : "UYVY");
 				return false;
 			}
-			o->bgraBuffer.resize((size_t)o->width * o->height * 4);
-			o->bgraLinesize = (int)(o->width * 4);
+			const size_t pixels = (size_t)o->width * o->height;
+			o->converted.resize(hx ? pixels * 3 / 2 : pixels * 2); /* NV12, or UYVY */
 		}
 		flags |= OBS_OUTPUT_VIDEO;
 	}
@@ -213,24 +224,32 @@ void omtOutputRawVideo(void *data, video_data *frame)
 
 	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
 	const int64_t timestamp = (int64_t)frame->timestamp / 100;
-	if (o->nv12) {
-		sender->sendVideoNv12(format, frame->data[0], (int)frame->linesize[0], frame->data[1],
-				      (int)frame->linesize[1], o->fullRange, timestamp);
+	const size_t w = o->width, h = o->height;
+	if (o->picture == OmtOutput::Picture::Bgra) {
+		const std::span<const uint8_t> bgra(frame->data[0], w * h * 4);
+		sender->sendVideo(format, bgra, o->alpha, timestamp);
 		return;
 	}
 
-	const size_t size = (size_t)o->width * o->height * 4;
-	const uint8_t *pixels = frame->data[0];
+	const uint8_t *planes[2] = {frame->data[0], frame->data[1]};
+	uint32_t linesizes[2] = {frame->linesize[0], frame->linesize[1]};
 	if (o->scaler) {
-		uint8_t *out = o->bgraBuffer.data();
-		uint32_t outLinesize = (uint32_t)o->bgraLinesize;
-		if (!video_scaler_scale(o->scaler, &out, &outLinesize, frame->data, frame->linesize)) {
+		uint8_t *out[2] = {o->converted.data(), o->converted.data() + w * h};
+		uint32_t outLinesize[2] = {(uint32_t)(o->picture == OmtOutput::Picture::Uyvy ? w * 2 : w), (uint32_t)w};
+		if (!video_scaler_scale(o->scaler, out, outLinesize, frame->data, frame->linesize)) {
 			return;
 		}
-		pixels = o->bgraBuffer.data();
+		planes[0] = out[0];
+		planes[1] = out[1];
+		linesizes[0] = outLinesize[0];
+		linesizes[1] = outLinesize[1];
 	}
-	const std::span<const uint8_t> bgra(pixels, size);
-	sender->sendVideo(format, bgra, o->alpha, timestamp);
+	if (o->picture == OmtOutput::Picture::Nv12) {
+		sender->sendVideoNv12(format, planes[0], (int)linesizes[0], planes[1], (int)linesizes[1], o->fullRange,
+				      timestamp);
+	} else {
+		sender->sendVideoUyvy(format, planes[0], (int)linesizes[0], nullptr, 0, false, timestamp);
+	}
 }
 
 void omtOutputRawAudio(void *data, audio_data *frame)

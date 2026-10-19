@@ -4,6 +4,7 @@
 #include <util/platform.h>
 
 #include <atomic>
+#include <cstring>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -66,15 +67,26 @@ void worker_main(omt_source *s)
 			frame.timestamp = toObs(video.timestamp);
 			frame.data[0] = video.bgra.data();
 
-			/* OBS composites premultiplied pictures */
+			/* OBS composites premultiplied pictures. Most pixels of a key are opaque or fully
+			 * transparent and need no multiply; the rest round x / 255 with a shift, exactly as a
+			 * divide would (omthx's mulDiv255). */
 			if (video.format.alpha && !video.premultiplied) {
 				s->scratch.resize(video.bgra.size());
+				const uint8_t *in = video.bgra.data();
+				uint8_t *out = s->scratch.data();
 				for (size_t i = 0; i < video.bgra.size(); i += 4) {
-					const unsigned alpha = video.bgra[i + 3];
-					for (size_t k = 0; k < 3; k++) {
-						s->scratch[i + k] = (uint8_t)((video.bgra[i + k] * alpha + 127) / 255);
+					const unsigned alpha = in[i + 3];
+					if (alpha == 255) {
+						std::memcpy(out + i, in + i, 4);
+					} else if (alpha == 0) {
+						std::memset(out + i, 0, 4);
+					} else {
+						for (size_t k = 0; k < 3; k++) {
+							const unsigned x = in[i + k] * alpha + 128;
+							out[i + k] = (uint8_t)((x + (x >> 8)) >> 8);
+						}
+						out[i + 3] = (uint8_t)alpha;
 					}
-					s->scratch[i + 3] = (uint8_t)alpha;
 				}
 				frame.data[0] = s->scratch.data();
 			}
