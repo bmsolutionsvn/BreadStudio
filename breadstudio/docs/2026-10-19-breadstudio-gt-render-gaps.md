@@ -5,6 +5,62 @@ For: the planning session, to turn into a plan.
 Status: the GT title input plan (Tasks 1–12) is complete and its task-level tests pass. This
 report is about the **first real comparison against vMix**, which now runs and measures.
 
+## 2026-10-20 correction — read this first
+
+Re-measured on 2026-10-20 on a fresh build. **§4b, §4c and §5 are superseded** (their text is kept,
+marked "Superseded:"), because they blamed the failures on fonts. They are not fonts. The fixes are
+planned in `2026-10-20-breadstudio-gt-render-fixes.md` and are on branch
+`breadstudio/gt-render-fixes`.
+
+Four findings, measured:
+
+1. **The comparison double-applied alpha.** vMix's snapshot PNG stores *premultiplied* colour in a
+   file labelled straight — MAN OF THE MATCH pixel (960,1060), alpha 227: source `238,123,10`, ours
+   `238,124,10`, vMix `212,110,9` = `238*227/255, 123*227/255` — and `compareImages` multiplied the
+   reference by `a/255` again. That is the "outlines at every edge" signature in the old diff maps.
+2. **Fonts are not the cause, and there is no font alias.** `CruyffSansVN` / `CruyffSansVNCondensed`
+   exist nowhere on this PC; vMix and BreadStudio both fall back to the same face (Segoe UI) with
+   identical glyphs and wrapping. Rewriting the 13 titles that use them to `Cruyff Sans` /
+   `Cruyff Sans Condensed` made **every** one of them worse against vMix — MAN OF THE MATCH
+   `0.785 → 2.860`, WINNER `0.063 → 1.067`, LINEUP 5 `2.369 → 10.106`.
+3. **A shadow was translated twice.** `drawShadow` applied the object matrix a second time, so a
+   shadow landed one extra object-location away.
+4. **Text was not clipped to its box**, so overflow painted over neighbouring objects.
+
+Final 25-run (`gtr15`): **25 compared, 18 ok, 3 known, 4 FAIL, exit 4.** The four are LINEUP 3,
+LINEUP 5, TEAM vs TEAM and WINNER.
+
+| title | mean | bad | |
+|---|---|---|---|
+| CACAS24/GTs/MHC/Timer | 7.658 | 4.966% | known — live clock |
+| CACAS24/GTs/MHC/Timer2 | 3.410 | 2.454% | known — live clock |
+| FVPL…/COUNT DOWN MHC/COUNTDOWN | 9.134 | 4.146% | known — live clock |
+| FVPL…/LINE UP/LINEUP 3 | 5.800 | 2.367% | FAIL |
+| FVPL…/LINE UP/LINEUP 5 | 4.971 | 2.054% | FAIL |
+| FVPL…/TEAM vs TEAM | 3.079 | 1.455% | FAIL |
+| FVPL…/WINER/WINNER | 0.729 | 0.540% | FAIL |
+| FVPL…/MAN OF THE MATCH | 0.542 | 0.261% | ok |
+| FVPL…/PRE INGAME | 0.539 | 0.339% | ok |
+| FVPL…/CAM PEN | 0.454 | 0.262% | ok |
+| EAFC24/GT/Matchup | 0.143 | 0.200% | ok |
+| EAFC24/GT/MHC | 0.132 | 0.132% | ok |
+| FVPL…/TAB INGAME | 0.118 | 0.117% | ok |
+| FVPL…/CAM LINEUP | 0.074 | 0.153% | ok |
+| EAFC24/GT/Caster | 0.073 | 0.155% | ok |
+| FVPL…/WIN RATE | 0.037 | 0.038% | ok |
+| EAFC24/GT/Ingame | 0.032 | 0.063% | ok |
+| EAFC24/GT/Cam2 | 0.030 | 0.033% | ok |
+| FVPL…/CASTER OFF LINE, CASTER ONL | 0.028 | 0.066% | ok |
+| FVPL…/NEXT MATCH | 0.022 | 0.031% | ok |
+| EAFC24/GT/TagWin | 0.011 | 0.018% | ok |
+| EAFC24/GT/TagCamIG | 0.004 | 0.000% | ok |
+| FVPL…/CODE | 0.003 | 0.005% | ok |
+| FVPL…/GIFTCODE IN | 0.002 | 0.005% | ok |
+
+One more caution: Finding 1 of the fixes plan was measured on an older render set (`gtr6`) that a
+fresh build of the same commit does not reproduce, so the plan's expected figures and this table are
+both taken from fresh builds rather than compared against each other.
+
 ## 1. How to reproduce, exactly
 
 vMix must be **open** with its API enabled (default `http://127.0.0.1:8088/api/`). Its output
@@ -65,6 +121,11 @@ The ten text-only titles did not move (mean ≤ 0.3), so that change is not a re
 Ingame, TagWin). It is about the *field/data* sense only. The change was reverted and re-measured;
 nothing of it is committed.
 
+**The font-fallback hypothesis in Superseded §4c/§5.** Rewriting the CruyffSansVN titles to
+`Cruyff Sans` / `Cruyff Sans Condensed` made every one of them *worse* — `MAN OF THE MATCH`
+0.785 → 2.860, `WINNER` 0.063 → 1.067, `LINEUP 5` 2.369 → 10.106. So do not add a font alias, and do
+not add a fuzzy family match; DirectWrite's own fallback stays.
+
 ## 4. The 13 failures, in three groups
 
 ### 4a. Not renderer bugs — clock and countdown fields (3 files)
@@ -81,7 +142,7 @@ pixel, and the comparison method — not the renderer — is wrong for them.
 **Do:** pin them with a unit test (the expansion is already unit-tested in `GtClock`) and exclude them
 from the pixel comparison, or make the comparison clock-aware. Do not "fix" the renderer for these.
 
-### 4b. Small differences that fail only the `bad > 0.5%` bound (4 files)
+### Superseded: 4b. Small differences that fail only the `bad > 0.5%` bound (4 files)
 
 | title | mean | bad |
 |---|---|---|
@@ -93,7 +154,7 @@ from the pixel comparison, or make the comparison clock-aware. Do not "fix" the 
 The mean is well inside the bound; a small number of localised pixels differ by more than 32. This is
 where to look first — a `-diff.png` shows exactly which element.
 
-### 4c. The CruyffSansVN titles (the real remaining bug)
+### Superseded: 4c. The CruyffSansVN titles (the real remaining bug)
 
 | title | mean | bad |
 |---|---|---|
@@ -104,7 +165,7 @@ where to look first — a `-diff.png` shows exactly which element.
 | LINEUP 3 / LINEUP 5 | 3.806 / 4.442 | 4.669% / 6.855% |
 | TEAM vs TEAM | 4.437 | 7.735% |
 
-## 5. The evidence for 4c, and the leading hypothesis
+## Superseded: 5. The evidence for 4c, and the leading hypothesis
 
 The `-diff.png` for MAN OF THE MATCH is almost entirely **glyph and silhouette outlines** — the same
 shapes in the same places, differing at their edges — plus solid blocks over the player name. That is
@@ -121,7 +182,7 @@ The titles confirm it. Fonts used, against result:
 | Caster / Cam2 / Ingame | Helvetica Neue | 0.18 / 0.08 / 0.09 — ok |
 | CASTER OFF LINE / ONL | Helvetica Neue | 0.12 / 0.28 — ok |
 | Matchup | Helvetica Neue | 0.447 — fails on `bad` |
-| **TEAM vs TEAM, WINNER, MAN OF THE MATCH, LINEUP 3/5, PRE INGAME, TAG INGAME** | **CruyffSansVN / CruyffSansVNCondensed** | 0.6 – 4.4 — fail |
+| TEAM vs TEAM, WINNER, MAN OF THE MATCH, LINEUP 3/5, PRE INGAME (TAB INGAME uses them too and passes) | **CruyffSansVN / CruyffSansVNCondensed** | 0.6 – 4.4 — fail |
 
 **Every badly-failing title asks for `CruyffSansVN` or `CruyffSansVNCondensed`. Nothing else does.**
 
@@ -135,8 +196,11 @@ And those families **do not exist on this PC**. What is installed:
   install folder, which carries **no** fonts of its own — `C:\Program Files (x86)\vMix` has none).
 
 So **both vMix and BreadStudio fall back for these titles, and their fallbacks differ.** vMix's
-fallback is what the references show; ours is what our render shows. `Helvetica Neue` and `SCHABO`
-resolve the same in both, which is why those titles pass.
+fallback is what the references show; ours is what our render shows. `Helvetica Neue` resolves in
+both, and `SCHABO` is installed (`SCHABO-Condensed.otf`, family `SCHABO`) and resolves too — which is
+why those titles pass, and not because anything matched a `CruyffSansVN` name.
+*(Superseded 2026-10-20: the fallbacks do not in fact differ — both resolve to Segoe UI with identical
+glyphs. See the correction at the top.)*
 
 The "VN" is almost certainly the author's intent to mean the Vietnamese-capable Cruyff Sans, and the
 designer's machine had it under a name this PC does not use.
