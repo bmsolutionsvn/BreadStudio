@@ -237,8 +237,12 @@ static bool savePng(const std::string &path, const std::vector<uint8_t> &bgra, i
 	return SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
 }
 
-/* The render is premultiplied and cleared to zero, so over black it is already
- * what the eye sees; a reference is straight, so over black it is rgb*a. */
+/* vMix's SnapshotInput PNG is labelled straight but stores premultiplied colour (plan Finding 1:
+ * its pixel (960,1060), alpha 227, holds 212,110,9, which is its source 238,123,10 premultiplied —
+ * 238*227/255, 123*227/255 — not the straight 238,123,10 the label implies). Our render is
+ * premultiplied over black already, so both sides are compared as premultiplied RGB: the reference
+ * channel is used as-is. A reference with no alpha has alpha 255, so its channel is that value over
+ * black too — the same thing. */
 static void compareImages(const std::vector<uint8_t> &ours, int ow, int oh, const std::vector<uint8_t> &ref, int rw,
 			  int rh, bool refHasAlpha, double &mean, double &badPercent, std::vector<uint8_t> &diff)
 {
@@ -252,11 +256,9 @@ static void compareImages(const std::vector<uint8_t> &ours, int ow, int oh, cons
 		for (int x = 0; x < width; x++) {
 			const uint8_t *o = ours.data() + ((size_t)y * ow + x) * 4;
 			const uint8_t *r = ref.data() + ((size_t)y * rw + x) * 4;
-			const int a = refHasAlpha ? r[3] : 255;
 			int worst = 0;
 			for (int c = 0; c < 3; c++) {
-				const int refChannel = (r[c] * a + 127) / 255; /* straight reference over black */
-				const int d = std::abs((int)o[c] - refChannel);
+				const int d = std::abs((int)o[c] - (int)r[c]);
 				sum += (uint64_t)d;
 				worst = std::max(worst, d);
 			}
@@ -265,15 +267,29 @@ static void compareImages(const std::vector<uint8_t> &ours, int ow, int oh, cons
 			}
 			uint8_t *d = diff.data() + ((size_t)y * width + x) * 4;
 			for (int c = 0; c < 3; c++) {
-				const int a2 = refHasAlpha ? r[3] : 255;
-				const int refChannel = (r[c] * a2 + 127) / 255;
-				d[c] = (uint8_t)std::clamp(std::abs((int)o[c] - refChannel), 0, 255);
+				d[c] = (uint8_t)std::clamp(std::abs((int)o[c] - (int)r[c]), 0, 255);
 			}
 			d[3] = 255;
 		}
 	}
 	mean = pixels ? (double)sum / (double)(pixels * 3) : 0.0;
 	badPercent = pixels ? 100.0 * (double)badCount / (double)pixels : 0.0;
+}
+
+/* Task 1: an equal premultiplied pair reads zero (vMix's snapshot stores premultiplied colour), and a
+ * one-channel difference of 40 is a bad pixel. */
+static void compareCheck()
+{
+	const std::vector<uint8_t> ours = {9, 110, 212, 227}; /* BGRA, premultiplied */
+	double mean = -1, bad = -1;
+	std::vector<uint8_t> diff;
+	compareImages(ours, 1, 1, ours, 1, 1, true, mean, bad, diff);
+	REQUIRE(mean == 0.0);
+
+	std::vector<uint8_t> shifted = ours;
+	shifted[2] = (uint8_t)(ours[2] + 40);
+	compareImages(ours, 1, 1, shifted, 1, 1, true, mean, bad, diff);
+	REQUIRE(bad == 100.0);
 }
 
 /* One glyph run that has no glyphs: used to see whether shaping produced .notdef. */
@@ -558,6 +574,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	compareCheck();
 	selfCheck(device.Get(), context.Get());
 	glyphCheck();
 

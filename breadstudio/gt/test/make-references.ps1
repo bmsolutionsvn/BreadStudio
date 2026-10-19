@@ -9,10 +9,12 @@
 # .gtzip under -Source becomes one PNG under -Out with the same relative path.
 #
 # --- vMix's SnapshotInput PNG carries alpha: CONFIRMED 2026-10-19. ---
-# A snapshot is 1920x1080 32bppArgb with a transparent corner, i.e. straight
-# alpha over nothing, which is what the render test's own readback produces, so
-# the two are compared like for like. (GtRenderTest.cpp composites a reference
-# that has no alpha over black; it does not take that path here.)
+# A snapshot is 1920x1080 32bppArgb with a transparent corner. The file is
+# labelled straight alpha, but its colour is premultiplied: 2026-10-20, pixel
+# (960,1060) at alpha 227 holds 212,110,9, its source 238,123,10 times 227/255.
+# That matches the render test's own premultiplied readback, so the two are
+# compared like for like. (GtRenderTest.cpp composites a reference that has no
+# alpha over black; it does not take that path here.)
 #
 # Expected on the owner's PC: 25 PNGs (design section 9).
 param(
