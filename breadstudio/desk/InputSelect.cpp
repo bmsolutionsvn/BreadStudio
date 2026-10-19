@@ -1,11 +1,13 @@
 #include "InputSelect.hpp"
 #include "Desk.hpp"
+#include "GtSettings.hpp"
 #include "InputModel.hpp"
 #include "InputPage.hpp"
 #include "NdiTab.hpp"
 #include "OmtTab.hpp"
 #include "PropertiesPage.hpp"
 #include "StreamPage.hpp"
+#include "TitlePage.hpp"
 
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -139,6 +141,10 @@ const Kind kinds[] = {
 	 [](QWidget *parent) -> InputPage * {
 		 return new PropertiesPage("image_source", "Type.Image", parent);
 	 }},
+	{"Kind.Title", gt::SourceId,
+	 [](QWidget *parent) -> InputPage * {
+		 return new TitlePage(parent);
+	 }},
 	{"Kind.Colour", "color_source",
 	 [](QWidget *parent) -> InputPage * {
 		 return new PropertiesPage("color_source", "Type.Colour", parent);
@@ -192,6 +198,8 @@ InputSelect::InputSelect(obs_source_t *input, QWidget *parent)
 			own = new NdiTab(base.Get(), pages);
 		} else if (base && std::strcmp(obs_source_get_unversioned_id(base), OmtTab::TypeId) == 0) {
 			own = new OmtTab(base.Get(), pages);
+		} else if (base && std::strcmp(obs_source_get_unversioned_id(base), gt::SourceId) == 0) {
+			own = new TitlePage(base.Get(), pages);
 		} else {
 			own = new PropertiesPage(base.Get(), pages);
 		}

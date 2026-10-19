@@ -17,6 +17,9 @@ target_link_libraries(
   bread-desk PRIVATE OBS::frontend-api OBS::libobs OBS::properties-view Qt::Widgets Qt6::Xml ZLIB::ZLIB
 )
 
+# The GT title package reader, for the Input Select Title page's thumbnail (gt-title design §4.1).
+target_include_directories(bread-desk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../gt")
+
 # The versions a Project's manifest carries: the fork's own, and the OBS it is built on.
 file(STRINGS "${CMAKE_SOURCE_DIR}/breadstudio/VERSION" BREADSTUDIO_VERSION LIMIT_COUNT 1)
 target_compile_definitions(
@@ -40,6 +43,7 @@ set_target_properties_obs(
 target_sources(
   bread-desk
   PRIVATE
+    ../gt/GtPackage.cpp
     AudioBed.cpp
     AudioBed.hpp
     BusMeters.cpp
@@ -101,6 +105,8 @@ target_sources(
     StreamWindow.hpp
     TileDisplay.cpp
     TileDisplay.hpp
+    TitlePage.cpp
+    TitlePage.hpp
     VmixBuild.cpp
     VmixPreset.cpp
     VmixPreset.hpp
