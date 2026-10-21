@@ -29,6 +29,9 @@ Start from a first run (no settings folder).
 6. Close and restart. Inputs, order, layers, levels, sends, ♪ and AFV are as
    they were.
 7. OBS's Scenes and Sources docks were not opened at any point above.
+8. Pause Inputs (`Pause Inputs` in the footer) with a looping media input
+   playing: it pauses; the button reads `Resume Inputs`; pressing it carries
+   on from where it stopped. With nothing playing the button is disabled.
 
 ## B. Failures (spec §8)
 

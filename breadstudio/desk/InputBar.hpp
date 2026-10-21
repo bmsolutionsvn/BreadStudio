@@ -50,14 +50,21 @@ private:
 	void showMenu(int index, const QPoint &globalPos);
 	void renameDialog(obs_source_t *input);
 	void deleteDialog(obs_source_t *input);
+	void togglePause();
+	void pauseMedia(obs_source_t *source);
+	bool anyPlaying() const;
+	void updatePauseButton();
 
 	std::vector<OBSSignal> muteSignals;
+	std::vector<OBSSource> pausedSources; /* what Pause stopped, so Resume starts only those */
 
 	QFrame *warning;
 	QScrollArea *scroll;
 	QVBoxLayout *rows;
 	QPushButton *record;
 	QPushButton *stream;
+	QPushButton *pauseButton;
+	bool paused = false;
 	QTimer streamTimer;
 	int perRow = 0;
 	std::vector<TileDisplay *> displays;     /* one per row */

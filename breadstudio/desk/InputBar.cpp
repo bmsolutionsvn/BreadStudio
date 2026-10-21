@@ -166,6 +166,12 @@ InputBar::InputBar(QWidget *parent) : QWidget(parent)
 	connect(streamSettings, &QPushButton::clicked, this, [this] { openStreamWindow(); });
 	footer->addWidget(streamSettings);
 
+	/* vMix's Pause Inputs: one button stops every playing media input, and starts them again */
+	pauseButton = new QPushButton(text("Pause"), this);
+	pauseButton->setToolTip(text("Pause.Tip"));
+	connect(pauseButton, &QPushButton::clicked, this, &InputBar::togglePause);
+	footer->addWidget(pauseButton);
+
 	/* OBS's own menus, which the desk hides the menu bar for (DeskLayout) */
 	auto *menu = new QToolButton(this);
 	menu->setText(QString::fromUtf8("\xE2\x98\xB0")); /* U+2630 */
@@ -191,6 +197,87 @@ void InputBar::updateOutputs()
 	}
 	stream->setText(text(engine.streaming() ? "Stream.Stop" : "Stream"));
 	stream->setStyleSheet(anyLive ? "background-color: #d00000; color: white;" : "");
+	updatePauseButton();
+}
+
+void InputBar::pauseMedia(obs_source_t *source)
+{
+	if (!source || obs_source_media_get_state(source) != OBS_MEDIA_STATE_PLAYING) {
+		return;
+	}
+
+	obs_source_media_play_pause(source, true);
+	pausedSources.emplace_back(source);
+}
+
+/* true when any input, or any layer inside one, is playing media */
+bool InputBar::anyPlaying() const
+{
+	for (const OBSSource &input : sources) {
+		if (!input) {
+			continue;
+		}
+		if (obs_source_media_get_state(input) == OBS_MEDIA_STATE_PLAYING) {
+			return true;
+		}
+
+		obs_scene_t *scene = obs_scene_from_source(input);
+		if (!scene) {
+			continue;
+		}
+
+		bool playing = false;
+		obs_scene_enum_items(
+			scene,
+			[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+				if (obs_source_media_get_state(obs_sceneitem_get_source(item)) ==
+				    OBS_MEDIA_STATE_PLAYING) {
+					*static_cast<bool *>(param) = true;
+					return false;
+				}
+				return true;
+			},
+			&playing);
+		if (playing) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void InputBar::updatePauseButton()
+{
+	pauseButton->setEnabled(paused || anyPlaying());
+	pauseButton->setText(text(paused ? "Resume" : "Pause"));
+}
+
+void InputBar::togglePause()
+{
+	if (paused) {
+		for (OBSSource &source : pausedSources) {
+			obs_source_media_play_pause(source, false);
+		}
+		pausedSources.clear();
+		paused = false;
+	} else {
+		for (OBSSource &input : sources) {
+			pauseMedia(input);
+			if (obs_scene_t *scene = obs_scene_from_source(input)) {
+				obs_scene_enum_items(
+					scene,
+					[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+						static_cast<InputBar *>(param)->pauseMedia(
+							obs_sceneitem_get_source(item));
+						return true;
+					},
+					this);
+			}
+		}
+		/* only call it paused when something was actually playing */
+		paused = !pausedSources.empty();
+	}
+
+	updatePauseButton();
 }
 
 void InputBar::openStreamWindow()
@@ -413,6 +500,7 @@ void InputBar::refresh()
 	layoutTiles();
 	updateTally();
 	updateOutputs();
+	updatePauseButton();
 }
 
 void InputBar::updateTally()
@@ -458,6 +546,8 @@ void InputBar::clear()
 	qDeleteAll(settingsParent()->findChildren<InputSelect *>());
 	qDeleteAll(settingsParent()->findChildren<InputSettings *>());
 	sources.clear();
+	pausedSources.clear();
+	paused = false;
 	clearTiles();
 }
 
