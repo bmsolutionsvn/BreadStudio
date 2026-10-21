@@ -17,6 +17,8 @@
 
 #include "OBSApp.hpp"
 
+#include <Branding.hpp>
+
 #include <components/Multiview.hpp>
 #include <dialogs/LogUploadDialog.hpp>
 #include <plugin-manager/PluginManager.hpp>
@@ -1139,7 +1141,8 @@ void OBSApp::AppInit()
 void OBSApp::checkForUncleanShutdown()
 {
 	bool hasUncleanShutdown = crashHandler_->hasUncleanShutdown();
-	bool hasNewCrashLog = crashHandler_->hasNewCrashLog();
+	/* BreadStudio: crash logs are never offered for upload to OBS's servers. */
+	bool hasNewCrashLog = false;
 
 	if (hasUncleanShutdown) {
 		UncleanLaunchAction launchAction = handleUncleanShutdown(hasNewCrashLog);
@@ -1732,10 +1735,11 @@ int GetAppConfigPath(char *path, size_t size, const char *name)
 			return snprintf(path, size, CONFIG_PATH);
 		}
 	} else {
-		return os_get_config_path(path, size, name);
+		/* BreadStudio: settings live under %APPDATA%\BreadStudio, not OBS's folder. */
+		return os_get_config_path(path, size, BreadStudio::ConfigSubPath(name).c_str());
 	}
 #else
-	return os_get_config_path(path, size, name);
+	return os_get_config_path(path, size, BreadStudio::ConfigSubPath(name).c_str());
 #endif
 }
 
@@ -1751,10 +1755,10 @@ char *GetAppConfigPathPtr(const char *name)
 			return NULL;
 		}
 	} else {
-		return os_get_config_path_ptr(name);
+		return os_get_config_path_ptr(BreadStudio::ConfigSubPath(name).c_str());
 	}
 #else
-	return os_get_config_path_ptr(name);
+	return os_get_config_path_ptr(BreadStudio::ConfigSubPath(name).c_str());
 #endif
 }
 

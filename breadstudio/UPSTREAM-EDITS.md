@@ -14,13 +14,17 @@ which is how a dependency the fork carries as ordinary files is listed once.
 - `.gitignore` - OBS ignores every top-level folder it does not name; this un-ignores breadstudio/
 - `CMakePresets.json` - adds a `windows-x64-vs2022` preset, for a machine with Visual Studio 2022; OBS's own `windows-x64` preset, and the generator it names, are left as upstream has them
 - `plugins/CMakeLists.txt` - five lines that add breadstudio/desk, breadstudio/omt-hx, breadstudio/ndi, breadstudio/srt and breadstudio/gt to the build
-- `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is
+- `frontend/OBSApp.cpp` - Studio Mode's scene duplication is off by default, so an edit to an input shows wherever the input is; settings paths are prefixed with BreadStudio/; crash-log upload offer is off
 - `frontend/CMakeLists.txt` - program file is BreadStudio.exe; includes breadstudio/cmake/frontend.cmake
-- `frontend/widgets/OBSBasic.cpp` - window title shows BreadStudio and its version
+- `frontend/widgets/OBSBasic.cpp` - window title shows BreadStudio and its version; third-party plugins load from ProgramData\BreadStudio\plugins
 - `frontend/widgets/OBSBasic_SysTray.cpp` - tray tooltip and notification title
 - `frontend/dialogs/OBSAbout.cpp` - name, "based on OBS Studio" version line, About text; no request to obsproject.com
 - `frontend/widgets/OBSBasic_SceneItems.cpp` - CreateFirstRunSources makes no global audio devices, because the desk takes its microphones and system audio as inputs
 - `frontend/forms/OBSBasicSettings.ui` - Settings → Audio's Global Audio Devices group is hidden, because the desk has no global audio devices; its control objects stay for OBSBasicSettings.cpp
+- `frontend/utility/platform-windows.cpp` - single-instance mutex is BreadStudioCore/BreadStudioPortable, so OBS and BreadStudio can run together
+- `frontend/dialogs/OBSYoutubeActions.cpp` - YouTube's default stream title is BreadStudio's, not OBS's
+- `frontend/wizards/AutoConfigStreamPage.cpp` - the bandwidth test's stream title is BreadStudio's
+- `frontend/oauth/AuthListener.cpp` - the browser page is BreadStudio's, with no OBS logo or server name
 
 ## Replaced
 

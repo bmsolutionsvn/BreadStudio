@@ -147,7 +147,7 @@ static void AddExtraModulePaths()
 
 	char base_module_dir[512];
 #if defined(_WIN32)
-	int ret = GetProgramDataPath(base_module_dir, sizeof(base_module_dir), "obs-studio/plugins/%module%");
+	int ret = GetProgramDataPath(base_module_dir, sizeof(base_module_dir), "BreadStudio/plugins/%module%");
 #elif defined(__APPLE__)
 	int ret = GetAppConfigPath(base_module_dir, sizeof(base_module_dir), "obs-studio/plugins/%module%.plugin");
 #else
