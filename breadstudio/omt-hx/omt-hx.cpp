@@ -38,7 +38,21 @@ struct omt_source {
 	float tallyWait = 0.0f;       /* seconds since the tally was last worked out; graphics thread */
 	bool tallySent = false;       /* false until rx has been told; guarded by rxMutex */
 	omthx::Tally sentTally;       /* guarded by rxMutex */
+	std::string lastError;        /* the last error logged, so one that repeats is logged once */
 };
+
+/* omthx throws; a frame is dropped instead of the exception ending the thread, which ends the program. An error
+ * that comes back every pass is logged once, not ten times a second. */
+void receiveFailed(omt_source *s, const std::exception *error)
+{
+	const std::string text = "[omt-hx] '" + s->address +
+				 "': receive failed: " + (error ? error->what() : "unknown error");
+	if (text == s->lastError) {
+		return;
+	}
+	s->lastError = text;
+	blog(LOG_WARNING, "%s", text.c_str());
+}
 
 void worker_main(omt_source *s)
 {
@@ -58,55 +72,63 @@ void worker_main(omt_source *s)
 	};
 
 	while (s->run) {
-		if (s->rx->receiveVideo(video, 20)) {
-			obs_source_frame frame = {};
-			frame.format = VIDEO_FORMAT_BGRA;
-			frame.width = (uint32_t)video.format.width;
-			frame.height = (uint32_t)video.format.height;
-			frame.linesize[0] = frame.width * 4;
-			frame.timestamp = toObs(video.timestamp);
-			frame.data[0] = video.bgra.data();
+		try {
+			if (s->rx->receiveVideo(video, 20)) {
+				obs_source_frame frame = {};
+				frame.format = VIDEO_FORMAT_BGRA;
+				frame.width = (uint32_t)video.format.width;
+				frame.height = (uint32_t)video.format.height;
+				frame.linesize[0] = frame.width * 4;
+				frame.timestamp = toObs(video.timestamp);
+				frame.data[0] = video.bgra.data();
 
-			/* OBS composites premultiplied pictures. Most pixels of a key are opaque or fully
-			 * transparent and need no multiply; the rest round x / 255 with a shift, exactly as a
-			 * divide would (omthx's mulDiv255). */
-			if (video.format.alpha && !video.premultiplied) {
-				s->scratch.resize(video.bgra.size());
-				const uint8_t *in = video.bgra.data();
-				uint8_t *out = s->scratch.data();
-				for (size_t i = 0; i < video.bgra.size(); i += 4) {
-					const unsigned alpha = in[i + 3];
-					if (alpha == 255) {
-						std::memcpy(out + i, in + i, 4);
-					} else if (alpha == 0) {
-						std::memset(out + i, 0, 4);
-					} else {
-						for (size_t k = 0; k < 3; k++) {
-							const unsigned x = in[i + k] * alpha + 128;
-							out[i + k] = (uint8_t)((x + (x >> 8)) >> 8);
+				/* OBS composites premultiplied pictures. Most pixels of a key are opaque or fully
+				 * transparent and need no multiply; the rest round x / 255 with a shift, exactly as a
+				 * divide would (omthx's mulDiv255). */
+				if (video.format.alpha && !video.premultiplied) {
+					s->scratch.resize(video.bgra.size());
+					const uint8_t *in = video.bgra.data();
+					uint8_t *out = s->scratch.data();
+					for (size_t i = 0; i < video.bgra.size(); i += 4) {
+						const unsigned alpha = in[i + 3];
+						if (alpha == 255) {
+							std::memcpy(out + i, in + i, 4);
+						} else if (alpha == 0) {
+							std::memset(out + i, 0, 4);
+						} else {
+							for (size_t k = 0; k < 3; k++) {
+								const unsigned x = in[i + k] * alpha + 128;
+								out[i + k] = (uint8_t)((x + (x >> 8)) >> 8);
+							}
+							out[i + 3] = (uint8_t)alpha;
 						}
-						out[i + 3] = (uint8_t)alpha;
 					}
+					frame.data[0] = s->scratch.data();
 				}
-				frame.data[0] = s->scratch.data();
+				obs_source_output_video(s->source, &frame);
 			}
-			obs_source_output_video(s->source, &frame);
-		}
 
-		while (s->rx->receiveAudio(audio, 0)) {
-			/* the first two channels: OMT cameras send stereo */
-			const int channels = audio.channels >= 2 ? 2 : 1;
-			obs_source_audio out = {};
-			for (int c = 0; c < channels; c++) {
-				out.data[c] =
-					(const uint8_t *)(audio.planar.data() + (size_t)c * (size_t)audio.samples);
+			while (s->rx->receiveAudio(audio, 0)) {
+				/* the first two channels: OMT cameras send stereo */
+				const int channels = audio.channels >= 2 ? 2 : 1;
+				obs_source_audio out = {};
+				for (int c = 0; c < channels; c++) {
+					out.data[c] = (const uint8_t *)(audio.planar.data() +
+									(size_t)c * (size_t)audio.samples);
+				}
+				out.frames = (uint32_t)audio.samples;
+				out.speakers = channels == 2 ? SPEAKERS_STEREO : SPEAKERS_MONO;
+				out.format = AUDIO_FORMAT_FLOAT_PLANAR;
+				out.samples_per_sec = (uint32_t)audio.sampleRate;
+				out.timestamp = toObs(audio.timestamp);
+				obs_source_output_audio(s->source, &out);
 			}
-			out.frames = (uint32_t)audio.samples;
-			out.speakers = channels == 2 ? SPEAKERS_STEREO : SPEAKERS_MONO;
-			out.format = AUDIO_FORMAT_FLOAT_PLANAR;
-			out.samples_per_sec = (uint32_t)audio.sampleRate;
-			out.timestamp = toObs(audio.timestamp);
-			obs_source_output_audio(s->source, &out);
+		} catch (const std::exception &error) {
+			receiveFailed(s, &error);
+			os_sleep_ms(100);
+		} catch (...) {
+			receiveFailed(s, nullptr);
+			os_sleep_ms(100);
 		}
 	}
 }
