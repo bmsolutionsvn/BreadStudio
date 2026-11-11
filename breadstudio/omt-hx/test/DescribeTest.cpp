@@ -27,6 +27,8 @@ static omthx::SourceInfo info(omthx::Mode mode, omthx::Codec codec, int w, int h
 	return result;
 }
 
+int anchorTests(); /* AnchorTest.cpp */
+
 int main()
 {
 	using omthx::Codec;
@@ -59,6 +61,9 @@ int main()
 	stats.mode = Mode::Full;
 	stats.decoder = "vmx";
 	CHECK(omt::receivingLine(stats, "GPU decode", "software decode") == "OMT" DOT "VMX");
+
+	/* the clock offset (AnchorTest.cpp) */
+	failures += anchorTests();
 
 	if (failures == 0) {
 		std::printf("Describe: all checks passed\n");

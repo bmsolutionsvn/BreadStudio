@@ -8,6 +8,7 @@
 #include <omthx/omthx.h>
 
 #include <media-io/video-scaler.h>
+#include <util/platform.h>
 
 #include <atomic>
 #include <memory>
@@ -45,7 +46,24 @@ struct OmtOutput {
 
 	video_scaler_t *scaler = nullptr; /* converts a canvas omthx cannot take as it is */
 	std::vector<uint8_t> converted;   /* the converted frame: NV12 (luma, then chroma) or UYVY */
+	std::vector<float> planar;        /* the audio's channels one after another, as omthx wants */
+	std::string lastError;            /* the last error logged, so one that repeats is logged once */
+	uint64_t fallbackCheck = 0;       /* ns of the last look at the sender's fallbacks */
+	std::string fallbackSeen;         /* the last one read, so only a new one is logged */
 };
+
+/* omthx throws; a picture or a block of sound is dropped instead of the exception reaching OBS. An error that
+ * comes back every frame is logged once, not sixty times a second. */
+void sendFailed(OmtOutput *o, const std::exception *error)
+{
+	const std::string text = "[bread-omt] output '" + o->name +
+				 "': send failed: " + (error ? error->what() : "unknown error");
+	if (text == o->lastError) {
+		return;
+	}
+	o->lastError = text;
+	blog(LOG_WARNING, "%s", text.c_str());
+}
 
 /* create() adds this to the output's proc handler before its definition below */
 void getReceivers(void *data, calldata_t *call);
@@ -216,39 +234,74 @@ void omtOutputRawVideo(void *data, video_data *frame)
 	}
 
 	omthx::VideoFormat format;
-	format.width = (int)o->width;
-	format.height = (int)o->height;
-	format.fpsN = o->fpsNum;
-	format.fpsD = o->fpsDen;
-	format.alpha = o->alpha;
-
-	/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
-	const int64_t timestamp = (int64_t)frame->timestamp / 100;
-	const size_t w = o->width, h = o->height;
-	if (o->picture == OmtOutput::Picture::Bgra) {
-		const std::span<const uint8_t> bgra(frame->data[0], w * h * 4);
-		sender->sendVideo(format, bgra, o->alpha, timestamp);
-		return;
-	}
-
-	const uint8_t *planes[2] = {frame->data[0], frame->data[1]};
-	uint32_t linesizes[2] = {frame->linesize[0], frame->linesize[1]};
-	if (o->scaler) {
-		uint8_t *out[2] = {o->converted.data(), o->converted.data() + w * h};
-		uint32_t outLinesize[2] = {(uint32_t)(o->picture == OmtOutput::Picture::Uyvy ? w * 2 : w), (uint32_t)w};
-		if (!video_scaler_scale(o->scaler, out, outLinesize, frame->data, frame->linesize)) {
+	try {
+		/* nobody listening: no picture is converted or copied */
+		if (!sender->hasReceivers()) {
 			return;
 		}
-		planes[0] = out[0];
-		planes[1] = out[1];
-		linesizes[0] = outLinesize[0];
-		linesizes[1] = outLinesize[1];
-	}
-	if (o->picture == OmtOutput::Picture::Nv12) {
-		sender->sendVideoNv12(format, planes[0], (int)linesizes[0], planes[1], (int)linesizes[1], o->fullRange,
-				      timestamp);
-	} else {
-		sender->sendVideoUyvy(format, planes[0], (int)linesizes[0], nullptr, 0, false, timestamp);
+		/* about once a second: what the sender fell back to (an encoder, a bitrate) is worth a log line */
+		const uint64_t now = os_gettime_ns();
+		if (now - o->fallbackCheck >= 1000000000ULL) {
+			o->fallbackCheck = now;
+			const std::string fallback = sender->stats().lastFallback;
+			if (fallback != o->fallbackSeen) {
+				o->fallbackSeen = fallback;
+				if (!fallback.empty()) {
+					blog(LOG_INFO, "[bread-omt] output '%s': sender fell back to %s",
+					     o->name.c_str(), fallback.c_str());
+				}
+			}
+		}
+		format.width = (int)o->width;
+		format.height = (int)o->height;
+		format.fpsN = o->fpsNum;
+		format.fpsD = o->fpsDen;
+		format.alpha = o->alpha;
+
+		/* OMT ticks: the frame's timestamp is in nanoseconds, divided by 100 to reach OMT ticks */
+		const int64_t timestamp = (int64_t)frame->timestamp / 100;
+		const size_t w = o->width, h = o->height;
+		if (o->picture == OmtOutput::Picture::Bgra) {
+			/* OBS's row padding is not part of the picture: those rows are copied together first */
+			const size_t rowBytes = w * 4;
+			const int stride = frame->linesize[0];
+			const uint8_t *bgra = frame->data[0];
+			if (stride != (int)rowBytes) {
+				o->converted.resize(rowBytes * h);
+				for (size_t y = 0; y < h; y++) {
+					std::memcpy(o->converted.data() + y * rowBytes,
+						    frame->data[0] + (size_t)y * (size_t)stride, rowBytes);
+				}
+				bgra = o->converted.data();
+			}
+			sender->sendVideo(format, std::span<const uint8_t>(bgra, rowBytes * h), o->alpha, timestamp);
+			return;
+		}
+
+		const uint8_t *planes[2] = {frame->data[0], frame->data[1]};
+		uint32_t linesizes[2] = {frame->linesize[0], frame->linesize[1]};
+		if (o->scaler) {
+			uint8_t *out[2] = {o->converted.data(), o->converted.data() + w * h};
+			uint32_t outLinesize[2] = {(uint32_t)(o->picture == OmtOutput::Picture::Uyvy ? w * 2 : w),
+						   (uint32_t)w};
+			if (!video_scaler_scale(o->scaler, out, outLinesize, frame->data, frame->linesize)) {
+				return;
+			}
+			planes[0] = out[0];
+			planes[1] = out[1];
+			linesizes[0] = outLinesize[0];
+			linesizes[1] = outLinesize[1];
+		}
+		if (o->picture == OmtOutput::Picture::Nv12) {
+			sender->sendVideoNv12(format, planes[0], (int)linesizes[0], planes[1],
+					      (int)linesizes[1], o->fullRange, timestamp);
+		} else {
+			sender->sendVideoUyvy(format, planes[0], (int)linesizes[0], nullptr, 0, false, timestamp);
+		}
+	} catch (const std::exception &error) {
+		sendFailed(o, &error);
+	} catch (...) {
+		sendFailed(o, nullptr);
 	}
 }
 
@@ -268,13 +321,23 @@ void omtOutputRawAudio(void *data, audio_data *frame)
 		return;
 	}
 
-	/* OBS gives one plane per channel; the loop assembles them one channel after another, as omthx wants */
-	std::vector<float> planar((size_t)frame->frames * o->channels);
-	for (size_t c = 0; c < o->channels; c++) {
-		std::memcpy(planar.data() + c * (size_t)frame->frames, frame->data[c],
-			    (size_t)frame->frames * sizeof(float));
+	/* OBS gives one plane per channel; the buffer holds them one channel after another, as omthx wants */
+	try {
+		/* nobody listening: no block is copied */
+		if (!sender->hasReceivers()) {
+			return;
+		}
+		o->planar.resize((size_t)frame->frames * o->channels);
+		for (size_t c = 0; c < o->channels; c++) {
+			std::memcpy(o->planar.data() + c * (size_t)frame->frames, frame->data[c],
+				    (size_t)frame->frames * sizeof(float));
+		}
+		sender->sendAudio(o->planar, o->sampleRate, (int)o->channels, (int64_t)frame->timestamp / 100);
+	} catch (const std::exception &error) {
+		sendFailed(o, &error);
+	} catch (...) {
+		sendFailed(o, nullptr);
 	}
-	sender->sendAudio(planar, o->sampleRate, (int)o->channels, (int64_t)frame->timestamp / 100);
 }
 
 } // namespace

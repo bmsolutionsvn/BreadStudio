@@ -16,7 +16,8 @@ add_library(OBS::omt-hx ALIAS omt-hx)
 
 set_target_properties(omt-hx PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
-# All five: link.cpp holds the sender beside the receiver, and the sender needs the encoder and the VMX alpha.
+# All six: link.cpp holds the sender beside the receiver, and the sender needs the encoder and the VMX alpha;
+# d3d11.cpp is the GPU readback, the UYVY and BGRA to NV12 conversion and the GPU shrink.
 target_sources(
   omt-hx
   PRIVATE
@@ -25,6 +26,7 @@ target_sources(
     omt-output.hpp
     Catalog.cpp
     Catalog.hpp
+    Anchor.hpp
     Describe.cpp
     Describe.hpp
     "${OMTHX_ROOT}/src/pure.cpp"
@@ -32,6 +34,7 @@ target_sources(
     "${OMTHX_ROOT}/src/decoder.cpp"
     "${OMTHX_ROOT}/src/alpha.cpp"
     "${OMTHX_ROOT}/src/link.cpp"
+    "${OMTHX_ROOT}/src/d3d11.cpp"
 )
 
 target_include_directories(
@@ -52,6 +55,8 @@ target_link_libraries(
     FFmpeg::swscale
     libomt
     libvmx   # alpha.cpp codes alpha with VMX; libvmx also brings vmxcodec.h's include dir
+    dxgi     # decoder.cpp picks a GPU; d3d11.cpp makes its own devices
+    d3d11
 )
 
 # libomt.dll loads libvmx.dll from the program's folder, so both go beside obs64.exe.
@@ -60,7 +65,7 @@ omthx_copy_runtime_to(omt-hx "${OBS_OUTPUT_DIR}/$<CONFIG>/${OBS_EXECUTABLE_DESTI
 set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
 
 # The tile and "receiving now" lines: no OBS. Includes omthx.h, so C++20.
-add_executable(bread-omt-test test/DescribeTest.cpp Describe.cpp)
+add_executable(bread-omt-test test/DescribeTest.cpp test/AnchorTest.cpp Describe.cpp)
 target_include_directories(bread-omt-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${OMTHX_ROOT}/include")
 target_compile_definitions(bread-omt-test PRIVATE OMTHX_STATIC)
 set_target_properties(
