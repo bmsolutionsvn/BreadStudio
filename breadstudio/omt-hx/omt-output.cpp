@@ -47,21 +47,24 @@ struct OmtOutput {
 	video_scaler_t *scaler = nullptr; /* converts a canvas omthx cannot take as it is */
 	std::vector<uint8_t> converted;   /* the converted frame: NV12 (luma, then chroma) or UYVY */
 	std::vector<float> planar;        /* the audio's channels one after another, as omthx wants */
-	std::string lastError;            /* the last error logged, so one that repeats is logged once */
+	/* the last error logged, so one that repeats is logged once: one each, as OBS calls the video and the
+	 * audio callback on different threads */
+	std::string lastVideoError;
+	std::string lastAudioError;
 	uint64_t fallbackCheck = 0;       /* ns of the last look at the sender's fallbacks */
 	std::string fallbackSeen;         /* the last one read, so only a new one is logged */
 };
 
 /* omthx throws; a picture or a block of sound is dropped instead of the exception reaching OBS. An error that
  * comes back every frame is logged once, not sixty times a second. */
-void sendFailed(OmtOutput *o, const std::exception *error)
+void sendFailed(OmtOutput *o, std::string &last, const std::exception *error)
 {
 	const std::string text = "[bread-omt] output '" + o->name +
 				 "': send failed: " + (error ? error->what() : "unknown error");
-	if (text == o->lastError) {
+	if (text == last) {
 		return;
 	}
-	o->lastError = text;
+	last = text;
 	blog(LOG_WARNING, "%s", text.c_str());
 }
 
@@ -299,9 +302,9 @@ void omtOutputRawVideo(void *data, video_data *frame)
 			sender->sendVideoUyvy(format, planes[0], (int)linesizes[0], nullptr, 0, false, timestamp);
 		}
 	} catch (const std::exception &error) {
-		sendFailed(o, &error);
+		sendFailed(o, o->lastVideoError, &error);
 	} catch (...) {
-		sendFailed(o, nullptr);
+		sendFailed(o, o->lastVideoError, nullptr);
 	}
 }
 
@@ -334,9 +337,9 @@ void omtOutputRawAudio(void *data, audio_data *frame)
 		}
 		sender->sendAudio(o->planar, o->sampleRate, (int)o->channels, (int64_t)frame->timestamp / 100);
 	} catch (const std::exception &error) {
-		sendFailed(o, &error);
+		sendFailed(o, o->lastAudioError, &error);
 	} catch (...) {
-		sendFailed(o, nullptr);
+		sendFailed(o, o->lastAudioError, nullptr);
 	}
 }
 
