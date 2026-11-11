@@ -8,6 +8,7 @@
 #include <omthx/omthx.h>
 
 #include <media-io/video-scaler.h>
+#include <util/platform.h>
 
 #include <atomic>
 #include <memory>
@@ -47,6 +48,8 @@ struct OmtOutput {
 	std::vector<uint8_t> converted;   /* the converted frame: NV12 (luma, then chroma) or UYVY */
 	std::vector<float> planar;        /* the audio's channels one after another, as omthx wants */
 	std::string lastError;            /* the last error logged, so one that repeats is logged once */
+	uint64_t fallbackCheck = 0;       /* ns of the last look at the sender's fallbacks */
+	std::string fallbackSeen;         /* the last one read, so only a new one is logged */
 };
 
 /* omthx throws; a picture or a block of sound is dropped instead of the exception reaching OBS. An error that
@@ -235,6 +238,19 @@ void omtOutputRawVideo(void *data, video_data *frame)
 		/* nobody listening: no picture is converted or copied */
 		if (!sender->hasReceivers()) {
 			return;
+		}
+		/* about once a second: what the sender fell back to (an encoder, a bitrate) is worth a log line */
+		const uint64_t now = os_gettime_ns();
+		if (now - o->fallbackCheck >= 1000000000ULL) {
+			o->fallbackCheck = now;
+			const std::string fallback = sender->stats().lastFallback;
+			if (fallback != o->fallbackSeen) {
+				o->fallbackSeen = fallback;
+				if (!fallback.empty()) {
+					blog(LOG_INFO, "[bread-omt] output '%s': sender fell back to %s",
+					     o->name.c_str(), fallback.c_str());
+				}
+			}
 		}
 		format.width = (int)o->width;
 		format.height = (int)o->height;

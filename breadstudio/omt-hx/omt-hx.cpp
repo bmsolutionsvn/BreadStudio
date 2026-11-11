@@ -40,6 +40,8 @@ struct omt_source {
 	bool tallySent = false;       /* false until rx has been told; guarded by rxMutex */
 	omthx::Tally sentTally;       /* guarded by rxMutex */
 	std::string lastError;        /* the last error logged, so one that repeats is logged once */
+	uint64_t fallbackCheck = 0;   /* ns of the last look at the receiver's fallbacks */
+	std::string fallbackSeen;     /* the last one read, so only a new one is logged */
 };
 
 /* omthx throws; a frame is dropped instead of the exception ending the thread, which ends the program. An error
@@ -67,6 +69,19 @@ void worker_main(omt_source *s)
 
 	while (s->run) {
 		try {
+			/* about once a second: what the receiver fell back to (a decoder) is worth a log line */
+			const uint64_t now = os_gettime_ns();
+			if (now - s->fallbackCheck >= 1000000000ULL) {
+				s->fallbackCheck = now;
+				const std::string fallback = s->rx->stats().lastFallback;
+				if (fallback != s->fallbackSeen) {
+					s->fallbackSeen = fallback;
+					if (!fallback.empty()) {
+						blog(LOG_INFO, "[omt-hx] '%s': receiver fell back to %s",
+						     s->address.c_str(), fallback.c_str());
+					}
+				}
+			}
 			if (s->rx->receiveVideo(video, 20)) {
 				obs_source_frame frame = {};
 				frame.format = VIDEO_FORMAT_BGRA;
