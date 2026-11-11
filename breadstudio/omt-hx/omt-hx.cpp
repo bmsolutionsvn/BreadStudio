@@ -14,6 +14,7 @@
 
 #include "omthx/omthx.h"
 
+#include "Anchor.hpp"
 #include "Catalog.hpp"
 #include "Describe.hpp"
 #include "OnAir.hpp"
@@ -59,17 +60,10 @@ void worker_main(omt_source *s)
 	omthx::VideoFrame video;
 	omthx::AudioFrame audio;
 
-	/* OMT timestamps are 100 ns units on the sender's clock. The first frame of either kind
-	 * anchors them to OBS's clock, so picture and sound keep one base. */
-	bool anchored = false;
-	uint64_t base = 0;
-	auto toObs = [&](int64_t omt) {
-		if (!anchored) {
-			base = os_gettime_ns() - (uint64_t)omt * 100;
-			anchored = true;
-		}
-		return base + (uint64_t)omt * 100;
-	};
+	/* OMT timestamps are 100 ns units on the sender's clock; one Anchor maps both picture and sound to
+	 * OBS's clock, and follows a sender that restarts. */
+	Anchor anchor;
+	auto toObs = [&](int64_t omt) { return anchor.toLocal(omt, os_gettime_ns()); };
 
 	while (s->run) {
 		try {

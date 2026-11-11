@@ -26,6 +26,7 @@ target_sources(
     omt-output.hpp
     Catalog.cpp
     Catalog.hpp
+    Anchor.hpp
     Describe.cpp
     Describe.hpp
     "${OMTHX_ROOT}/src/pure.cpp"
@@ -64,7 +65,7 @@ omthx_copy_runtime_to(omt-hx "${OBS_OUTPUT_DIR}/$<CONFIG>/${OBS_EXECUTABLE_DESTI
 set_target_properties_obs(omt-hx PROPERTIES FOLDER plugins/omt-hx PREFIX "")
 
 # The tile and "receiving now" lines: no OBS. Includes omthx.h, so C++20.
-add_executable(bread-omt-test test/DescribeTest.cpp Describe.cpp)
+add_executable(bread-omt-test test/DescribeTest.cpp test/AnchorTest.cpp Describe.cpp)
 target_include_directories(bread-omt-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${OMTHX_ROOT}/include")
 target_compile_definitions(bread-omt-test PRIVATE OMTHX_STATIC)
 set_target_properties(
